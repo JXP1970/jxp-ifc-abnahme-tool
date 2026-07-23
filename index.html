@@ -1,0 +1,2138 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>IFC Bewehrungsabnahme</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0b0d12;--panel:#0e1018;--border:#1c2130;
+  --accent:#00c8ff;--text:#b8c4d8;--muted:#3a4560;
+  --ok:#00e676;--warn:#ffaa00;--err:#ff4466;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:18px;overflow:hidden}
+/* HEADER */
+header{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;height:48px}
+.logo{width:28px;height:28px;background:linear-gradient(135deg,#00c8ff,#0044ff);border-radius:5px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13.5px;color:#fff;flex-shrink:0}
+.htitle{font-size:19.5px;font-weight:600;color:#dce8ff}
+.hsub{font-size:13.5px;color:var(--muted)}
+.vbadge{display:inline-block;font-size:13.5px;font-weight:700;color:var(--accent);background:#0d1b2e;border:1px solid var(--border);border-radius:4px;padding:1px 5px;margin-left:6px;cursor:pointer;vertical-align:middle;letter-spacing:.03em;touch-action:manipulation;user-select:none}
+.vbadge:hover{border-color:var(--accent)}
+.ver-pop{position:fixed;top:46px;left:50px;z-index:200;width:300px;max-width:calc(100vw - 24px);max-height:70vh;overflow:auto;background:var(--panel);border:1px solid var(--accent);border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,.55);padding:12px 13px;display:none}
+.ver-pop h4{margin:0 0 8px;font-size:18px;color:#dce8ff;display:flex;justify-content:space-between;align-items:center}
+.ver-pop .vc{font-size:13.5px;color:var(--muted);cursor:pointer;border:1px solid var(--border);border-radius:4px;padding:1px 6px}
+.ver-item{border-top:1px solid var(--border);padding:7px 0}
+.ver-item:first-of-type{border-top:none}
+.ver-item .vh{font-size:16.5px;font-weight:700;color:var(--accent);margin-bottom:3px}
+.ver-item .vd{font-size:13.5px;color:var(--muted);font-weight:400;margin-left:6px}
+.ver-item ul{margin:0;padding-left:15px}
+.ver-item li{font-size:15px;color:var(--text);line-height:1.5}
+.hright{margin-left:auto;display:flex;gap:6px;align-items:center}
+/* TABS */
+.tabs{display:flex;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{padding:8px 16px;font-size:16.5px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;user-select:none;touch-action:manipulation;transition:all .15s;font-family:inherit}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.tab:hover{color:var(--text)}
+/* LAYOUT */
+.app{display:flex;flex-direction:column;height:100dvh}
+.panels{flex:1;overflow:hidden;position:relative}
+.panel{display:none;position:absolute;inset:0;overflow:hidden}
+.panel.active{display:flex}
+/* BTN */
+.btn{padding:5px 11px;border-radius:5px;border:none;font-size:15px;font-family:inherit;cursor:pointer;font-weight:600;transition:all .15s;touch-action:manipulation}
+.btn-p{background:var(--accent);color:#001a2a}.btn-p:hover{opacity:.85}
+.btn-s{background:#1a2535;color:var(--muted);border:1px solid var(--border)}
+.btn-d{background:#1a0a10;color:var(--err);border:1px solid #2a1520}
+.btn:disabled{opacity:.3;cursor:not-allowed}
+/* SIDEBAR */
+.sb{width:200px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.sb-head{padding:9px 12px;border-bottom:1px solid var(--border)}
+.sb-label{font-size:13.5px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;margin-bottom:5px}
+.sb-inp{width:100%;background:#080a0f;border:1px solid var(--border);border-radius:4px;padding:4px 7px;color:var(--text);font-family:inherit;font-size:16.5px;outline:none}
+.sb-inp:focus{border-color:var(--accent)}
+.sb-list{flex:1;overflow-y:auto;padding:3px 0}
+.sb-list::-webkit-scrollbar{width:3px}.sb-list::-webkit-scrollbar-thumb{background:var(--border)}
+.sb-foot{padding:6px 12px;border-top:1px solid var(--border);font-size:15px;color:var(--muted)}
+.si{display:flex;align-items:center;gap:7px;padding:7px 12px;cursor:pointer;border-bottom:1px solid #0f1520;user-select:none;touch-action:manipulation;transition:background .1s;font-size:16.5px}
+.si:hover{background:#121824}.si.active{background:#0a1a30;color:var(--accent)}
+.si-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+.si-cnt{margin-left:auto;font-size:15px;color:var(--muted);background:#1a2535;padding:1px 6px;border-radius:8px}
+/* CENTER */
+.ctr{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.toolbar{padding:7px 12px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;background:var(--panel);flex-shrink:0;flex-wrap:wrap}
+.t-inp{flex:1;min-width:80px;background:#080a0f;border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--text);font-family:inherit;font-size:16.5px;outline:none}
+.t-inp:focus{border-color:var(--accent)}
+.t-sel{background:#080a0f;border:1px solid var(--border);color:var(--text);font-family:inherit;font-size:16.5px;padding:4px 6px;border-radius:4px;outline:none}
+.tw{flex:1;overflow-y:auto}.tw::-webkit-scrollbar{width:4px}.tw::-webkit-scrollbar-thumb{background:var(--border)}
+table{width:100%;border-collapse:collapse;font-size:16.5px}
+thead th{padding:6px 10px;text-align:left;font-size:13.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);position:sticky;top:0;background:#0a0c11;cursor:pointer;user-select:none;white-space:nowrap}
+thead th:hover{color:var(--accent)}
+tbody tr{border-bottom:1px solid #0f1520;cursor:pointer;transition:background .1s}
+tbody tr:hover{background:#0d1525}
+tbody tr.sel{background:#0a1e35}
+tbody tr.edited td:first-child{border-left:2px solid var(--warn)}
+td.warn-text{color:var(--warn)}
+td{padding:6px 10px;vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px}
+.pill{display:inline-block;background:#0a1a2a;color:#00aacc;border-radius:3px;padding:1px 5px;font-size:13.5px}
+.t-status{padding:5px 12px;border-top:1px solid var(--border);font-size:15px;color:var(--muted);display:flex;gap:12px;flex-shrink:0;background:var(--panel)}
+/* DETAIL */
+.det{width:260px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.det.hidden{width:0;overflow:hidden;border:none}
+.d-head{padding:9px 12px;border-bottom:1px solid var(--border)}
+.d-id{font-size:16.5px;color:var(--accent);font-weight:700;margin-bottom:2px}
+.d-body{flex:1;overflow-y:auto;padding:9px 12px}
+.d-body::-webkit-scrollbar{width:3px}.d-body::-webkit-scrollbar-thumb{background:var(--border)}
+.d-row{margin-bottom:9px}
+.d-key{font-size:13.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:3px}
+.d-val{font-size:16.5px;color:#dce8ff;word-break:break-all}
+.d-inp{width:100%;background:#080a0f;border:1px solid var(--border);border-radius:4px;padding:4px 7px;color:var(--text);font-family:inherit;font-size:16.5px;outline:none}
+.d-inp:focus{border-color:var(--accent)}.d-inp.changed{border-color:var(--warn);color:var(--warn)}
+.d-sep{border:none;border-top:1px solid var(--border);margin:7px 0}
+.d-foot{padding:8px 12px;border-top:1px solid var(--border);display:flex;gap:5px}
+.d-foot .btn{flex:1;padding:5px;font-size:15px}
+/* VIEWER */
+.vw{flex:1;display:flex;overflow:hidden;position:relative}
+.v-sb{width:180px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.v-ca{flex:1;position:relative;overflow:hidden}
+#vc{width:100%;height:100%;display:block;touch-action:none;outline:none}
+.v-hud{position:absolute;bottom:36px;right:12px;display:flex;flex-direction:column;gap:5px;z-index:3}
+.hb{width:44px;height:44px;background:rgba(14,16,24,.92);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;backdrop-filter:blur(8px);touch-action:manipulation;border:none}
+.hb:hover,.hb:active{border:1px solid var(--accent);color:var(--accent)}
+.hb.ghost-on{border:1px solid var(--accent)!important;color:var(--accent)!important;opacity:1!important}
+.v-stats{position:absolute;bottom:0;left:0;right:0;padding:4px 12px;background:rgba(14,16,24,.85);border-top:1px solid var(--border);font-size:13.5px;color:var(--muted);display:flex;gap:12px}
+.v-info{position:absolute;top:10px;right:10px;background:rgba(14,16,24,.95);border:1px solid var(--border);border-radius:8px;padding:11px 13px;min-width:170px;display:none;backdrop-filter:blur(8px);font-size:16.5px;z-index:3;max-width:230px}
+.v-info.show{display:block}
+.vir{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid #1a2030;font-size:15px}
+.vir:last-child{border:none}
+.vik{color:var(--muted)}.viv{color:#dce8ff}
+/* MARK PANEL */
+.mp{position:absolute;bottom:36px;left:12px;background:rgba(14,16,24,.95);border:1px solid #ff4400;border-radius:8px;padding:11px 13px;font-size:16.5px;backdrop-filter:blur(8px);min-width:190px;display:none;z-index:3}
+/* ABNAHME */
+.ab-wrap{display:flex;flex:1;overflow:hidden}
+.ab-left{width:220px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.ab-ctr{flex:1;display:flex;flex-direction:column;overflow-y:auto;padding:18px 20px}
+.ab-right{width:240px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.ab-item{display:flex;align-items:center;gap:7px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #0f1520;touch-action:manipulation;transition:background .1s;font-size:16.5px}
+.ab-item:hover{background:#121824}.ab-item.active{background:#0a1a30}
+/* OVERLAY */
+.ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:50}
+.dz{border:2px dashed var(--border);border-radius:12px;padding:40px 50px;text-align:center;cursor:pointer;transition:all .2s;max-width:380px;width:90%}
+.dz:hover,.dz.drag{border-color:var(--accent);background:rgba(0,200,255,.03)}
+.dz-icon{font-size:60px;margin-bottom:12px;opacity:.3}
+.dz-title{font-size:22.5px;font-weight:600;color:#dce8ff;margin-bottom:6px}
+.dz-sub{font-size:16.5px;color:var(--muted);line-height:1.8}
+.drop-btn{margin-top:14px;padding:8px 20px;background:var(--accent);color:#001a2a;border:none;border-radius:6px;font-size:18px;font-weight:600;cursor:pointer;font-family:inherit;touch-action:manipulation}
+/* LOADING */
+.ld{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);z-index:60}
+.ld.show{display:flex}
+.spin{width:40px;height:40px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:sp .8s linear infinite;margin-bottom:14px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.ld-txt{font-size:16.5px;color:var(--muted)}
+.pb{width:180px;height:3px;background:var(--border);border-radius:2px;margin-top:10px;overflow:hidden}
+.pf{height:100%;background:var(--accent);border-radius:2px;transition:width .3s}
+/* TOAST */
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#0a1a30;border:1px solid var(--accent);color:var(--accent);padding:7px 16px;border-radius:5px;font-size:16.5px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100;white-space:nowrap}
+.toast.show{opacity:1}
+/* SETTINGS PANEL */
+.settings-panel{display:none;position:absolute;background:rgba(14,16,24,.97);border:1px solid var(--accent);border-radius:9px;padding:13px;width:230px;z-index:10;backdrop-filter:blur(10px);font-size:16.5px}
+select.sb-inp{appearance:none}
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="logo">IFC</div>
+  <div><div class="htitle">IFC EDITOR + VIEWER<span class="vbadge" id="verBadge" title="Versionsverlauf anzeigen">V?</span></div><div class="hsub" id="fileInfo">Keine Datei geladen</div></div>
+  <div class="ver-pop" id="verPop"></div>
+  <div class="hright">
+    <div id="statusBadge" style="display:none;background:#0d1525;border:1px solid var(--border);border-radius:5px;padding:3px 9px;font-size:15px;color:var(--muted);display:none;align-items:center;gap:5px">
+      <span style="width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 5px var(--ok);display:inline-block"></span>
+      <span id="statusTxt">–</span>
+    </div>
+    <button class="btn btn-s" id="btnNewFile">📂 Datei</button>
+    <button class="btn btn-p" id="btnCSV" disabled>⬇ CSV</button>
+    <button class="btn btn-p" id="btnIFC" disabled>⬇ IFC</button>
+    <button class="btn btn-d" id="btnReset" disabled>↺ Reset</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" id="tabEditor">✏️ Editor</div>
+  <div class="tab" id="tabViewer">🧊 3D Viewer</div>
+  <div class="tab" id="tabAbnahme">📋 Abnahme</div>
+</div>
+
+<div class="panels">
+
+<!-- ══ EDITOR ══ -->
+<div class="panel active" id="panelEditor">
+  <div class="sb">
+    <div class="sb-head">
+      <div class="sb-label">Gruppieren nach</div>
+      <select class="sb-inp" id="groupBy" style="margin-bottom:5px"><option value="Pos_Nr.">Pos_Nr.</option></select>
+      <input class="sb-inp" id="grpSearch" placeholder="Filtern…">
+    </div>
+    <div class="sb-list" id="grpList"></div>
+    <div class="sb-foot" id="grpFoot">–</div>
+  </div>
+  <div class="ctr">
+    <div class="toolbar">
+      <input class="t-inp" id="search" placeholder="Suche…">
+      <select class="t-sel" id="fieldFlt"><option value="">Alle Felder</option></select>
+      <select class="t-sel" id="valFlt" style="display:none"><option value="">Alle Werte</option></select>
+      <button class="btn btn-s" id="btnClearFlt">✕</button>
+    </div>
+    <div class="tw"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
+    <div class="t-status"><span id="cntTxt">–</span><span id="editTxt" style="color:var(--warn);display:none"></span></div>
+  </div>
+  <div class="det hidden" id="detPanel">
+    <div class="d-head"><div class="d-id" id="detId">–</div><div style="font-size:15px;color:var(--muted)" id="detPos">–</div></div>
+    <div class="d-body" id="detBody"></div>
+    <div class="d-foot">
+      <button class="btn btn-p" id="btnSaveDet">✓</button>
+      <button class="btn btn-s" id="btnResetRow">↺</button>
+      <button class="btn btn-s" id="btnCloseDet">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ VIEWER ══ -->
+<div class="panel" id="panelViewer">
+  <div class="vw">
+    <div class="v-sb">
+      <div class="sb-head"><div class="sb-label">Positionen</div><div style="font-size:13.5px;color:var(--muted);margin-top:2px">Mehrere antippbar</div></div>
+      <div class="sb-list" id="vList"><div style="padding:14px 12px;color:var(--muted);font-size:15px">–</div></div>
+      <div class="sb-foot" id="vFoot">–</div>
+    </div>
+    <div class="v-ca">
+      <canvas id="vc"></canvas>
+      <div id="vEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:8px;font-size:18px">
+        <span style="font-size:48px;opacity:.2">🧊</span><span>IFC laden</span>
+      </div>
+      <!-- HUD -->
+      <div class="v-hud" id="vHud" style="display:none">
+        <button class="hb" id="hbReset" title="Reset">⟳</button>
+        <button class="hb" id="hbTop" title="Draufsicht">⬆</button>
+        <button class="hb" id="hbAll" title="Alle">👁</button>
+        <button class="hb" id="hbGhost" title="Halbtransparent" style="opacity:.4">👻</button>
+        <button class="hb" id="hbBox" title="Rechteck-Selektion" style="opacity:.4">⬚</button>
+        <button class="hb" id="hbMeasure" title="Messen" style="opacity:.4">📏</button>
+        <button class="hb" id="hbMeasureClear" title="Maße löschen" style="display:none;background:rgba(10,20,40,.92);border:1px solid #ffee00!important;color:#ffee00!important">✕📏</button>
+        <button class="hb" id="hbClear" title="Markierungen löschen" style="display:none;background:rgba(40,10,5,.92);border:1px solid #ff4400!important;color:#ff4400!important">✕</button>
+      </div>
+      <!-- Info panel -->
+      <div class="v-info" id="vInfo">
+        <div id="vInfoHdr" style="display:flex;align-items:center;gap:5px;justify-content:space-between;margin-bottom:8px">
+          <span style="color:var(--muted);font-size:21px;line-height:1;flex-shrink:0">⠿</span>
+          <div style="font-weight:700;font-size:16.5px;flex:1" id="vInfoTitle">–</div>
+          <button class="btn btn-s" id="vInfoCfg" style="padding:2px 6px;font-size:18px">⚙</button>
+        </div>
+        <div id="vInfoRows"></div>
+        <div id="vMarkHint" style="margin-top:7px;font-size:15px;color:var(--muted)"></div>
+      </div>
+      <!-- Info settings -->
+      <div class="settings-panel" id="vInfoSettings" style="top:10px;right:10px">
+        <div id="vInfoSettingsHdr" style="display:flex;align-items:center;gap:5px;justify-content:space-between;margin-bottom:9px">
+          <span style="color:var(--muted);font-size:21px;line-height:1;flex-shrink:0">⠿</span>
+          <span style="color:#dce8ff;font-weight:700;font-size:16.5px;flex:1">Attribute (Info)</span>
+          <button class="btn btn-s" id="vInfoCfgClose" style="padding:1px 6px">✕</button>
+        </div>
+        <div id="vInfoAttrList" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:3px"></div>
+        <div style="margin-top:8px;display:flex;gap:5px">
+          <button class="btn btn-s" id="vInfoAll" style="flex:1;font-size:15px">Alle</button>
+          <button class="btn btn-s" id="vInfoNone" style="flex:1;font-size:15px">Keine</button>
+        </div>
+      </div>
+      <!-- Mark panel -->
+      <div class="mp" id="mp">
+        <div id="mpHdr" style="display:flex;align-items:center;gap:5px;justify-content:space-between;margin-bottom:8px">
+          <span style="color:#ff4400;font-size:21px;line-height:1;flex-shrink:0">⠿</span>
+          <div style="color:#ff4400;font-weight:700;font-size:18px;flex:1">🔴 <span id="mpCount">0</span></div>
+          <button class="btn btn-s" id="mpCfg" style="padding:2px 6px;font-size:18px">⚙</button>
+        </div>
+        <div id="mpRows"></div>
+        <div style="display:flex;gap:5px;margin-top:9px">
+          <button class="btn btn-s" id="mpHide" style="flex:1;font-size:15px;border-color:#00cc66;color:#00cc66">👁 Aus</button>
+          <button class="btn btn-s" id="mpShow" style="flex:1;font-size:15px;border-color:#00cc66;color:#00cc66;display:none">👁 Ein</button>
+          <button class="btn btn-d" id="mpClear" style="flex:1;font-size:15px">✕ Del</button>
+        </div>
+        <button class="btn btn-s" id="mpIso" style="width:100%;margin-top:5px;font-size:15px;padding:6px;border-color:var(--accent);color:var(--accent)">🎯 Isolieren</button>
+        <button class="btn btn-s" id="mpIsoOff" style="width:100%;margin-top:5px;font-size:15px;padding:6px;border-color:var(--warn);color:var(--warn);display:none">🌐 Alle zeigen</button>
+        <button class="btn btn-p" id="mpStich" style="width:100%;margin-top:5px;font-size:15px;padding:7px;touch-action:manipulation">📋 Stichprobe</button>
+      </div>
+      <!-- Mark settings -->
+      <div class="settings-panel" id="mpSettings" style="bottom:36px;left:12px">
+        <div id="mpSettingsHdr" style="display:flex;align-items:center;gap:5px;justify-content:space-between;margin-bottom:9px">
+          <span style="color:var(--muted);font-size:21px;line-height:1;flex-shrink:0">⠿</span>
+          <span style="color:#dce8ff;font-weight:700;font-size:16.5px;flex:1">Attribute (Summe)</span>
+          <button class="btn btn-s" id="mpCfgClose" style="padding:1px 6px">✕</button>
+        </div>
+        <div id="mpAttrList" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:3px"></div>
+        <div style="margin-top:8px;display:flex;gap:5px">
+          <button class="btn btn-s" id="mpAll" style="flex:1;font-size:15px">Alle</button>
+          <button class="btn btn-s" id="mpNone" style="flex:1;font-size:15px">Keine</button>
+        </div>
+      </div>
+      <!-- Stats bar -->
+      <div class="v-stats" id="vStats" style="display:none">
+        <span id="vStatObjs">–</span><span id="vStatGrp">–</span>
+        <span>1Finger=Rotieren · 2Finger=Zoom/Pan · Tippen=Markieren</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ ABNAHME ══ -->
+<div class="panel" id="panelAbnahme">
+  <div class="ab-wrap">
+    <div class="ab-left">
+      <div class="sb-head">
+        <div class="sb-label">Positionen</div>
+        <div id="abProg" style="font-size:15px;color:var(--muted);margin-top:3px">–</div>
+        <div id="abFilterNote" style="display:none;font-size:15px;color:var(--accent);margin-top:2px">⬚ Aus Markierung</div>
+      </div>
+      <div class="sb-list" id="abList"></div>
+      <div style="padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
+        <button class="btn btn-p" id="abCSV" style="width:100%;padding:7px">⬇ CSV</button>
+        <button class="btn btn-s" id="abPDF" style="width:100%;padding:7px">⬇ PDF</button>
+      </div>
+    </div>
+    <div class="ab-ctr" id="abCtr">
+      <div id="abEmpty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:8px">
+        <span style="font-size:54px;opacity:.2">📋</span>
+        <span>Position wählen</span>
+      </div>
+      <div id="abForm" style="display:none">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+          <div>
+            <div style="font-size:25.5px;font-weight:700;color:#dce8ff" id="abTitle">–</div>
+            <div style="font-size:15px;color:var(--muted);margin-top:2px" id="abSub">–</div>
+          </div>
+          <div id="abBadge" style="padding:5px 12px;border-radius:5px;font-size:16.5px;font-weight:700;border:2px solid var(--border);color:var(--muted)">OFFEN</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div style="background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px">
+            <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Soll (IFC)</div>
+            <div style="font-size:39px;font-weight:700;color:#dce8ff" id="abSoll">–</div>
+            <div style="font-size:15px;color:var(--muted)">Stäbe</div>
+          </div>
+          <div style="background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px">
+            <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Ist (vor Ort)</div>
+            <input id="abIst" type="number" min="0" placeholder="–" style="width:100%;background:transparent;border:none;outline:none;font-size:39px;font-weight:700;color:var(--accent);font-family:inherit;padding:0">
+            <div style="font-size:15px;color:var(--muted)">Stäbe</div>
+          </div>
+        </div>
+        <div id="abDelta" style="display:none;padding:9px 12px;border-radius:6px;margin-bottom:14px;font-size:18px;font-weight:600"></div>
+        <div style="background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:14px">
+          <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">IFC Attribute</div>
+          <div id="abAttrs"></div>
+        </div>
+        <div style="margin-bottom:14px">
+          <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Kommentar</div>
+          <textarea id="abKomm" rows="3" style="width:100%;background:#080a0f;border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:inherit;font-size:16.5px;resize:vertical;outline:none;line-height:1.5" placeholder="Bemerkungen…"></textarea>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Foto</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="file" accept="image/*" capture="environment" id="abFoto" style="display:none">
+            <button class="btn btn-s" id="abFotoBtn">📷 Foto</button>
+            <span id="abFotoName" style="font-size:15px;color:var(--muted)"></span>
+          </div>
+          <img id="abFotoImg" style="display:none;margin-top:8px;max-width:100%;max-height:150px;border-radius:6px;border:1px solid var(--border)">
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="abOk" style="flex:1;min-width:80px;padding:11px;font-size:18px;background:#0a2010;border:2px solid #00cc66;color:#00cc66;touch-action:manipulation">✓ Bestanden</button>
+          <button class="btn" id="abAbw" style="flex:1;min-width:80px;padding:11px;font-size:18px;background:#1a1000;border:2px solid #ffaa00;color:#ffaa00;touch-action:manipulation">⚠ Abweichung</button>
+          <button class="btn" id="abOff" style="flex:1;min-width:80px;padding:11px;font-size:18px;background:#1a2535;border:1px solid var(--border);color:var(--muted);touch-action:manipulation">○ Offen</button>
+        </div>
+      </div>
+    </div>
+    <div class="ab-right">
+      <div class="sb-head"><div class="sb-label">Protokoll</div></div>
+      <div style="flex:1;overflow-y:auto;padding:8px 10px" id="abProtokoll"></div>
+      <div style="padding:8px 12px;border-top:1px solid var(--border);font-size:15px;display:flex;flex-direction:column;gap:2px">
+        <span id="abOkCnt" style="color:var(--ok)">✓ 0</span>
+        <span id="abAbwCnt" style="color:var(--warn)">⚠ 0</span>
+        <span id="abOffCnt" style="color:var(--muted)">○ 0</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /panels -->
+</div><!-- /app -->
+
+<!-- UPLOAD -->
+<div class="ov" id="ov">
+  <div class="dz" id="dz">
+    <div class="dz-icon">🏗️</div>
+    <div class="dz-title">IFC-Datei laden</div>
+    <div class="dz-sub">Drag & Drop · IFC2x3 · IFC4</div>
+    <button class="drop-btn" id="btnChoose">Datei wählen</button>
+    <input type="file" id="fileIn" accept=".ifc" style="display:none">
+  </div>
+</div>
+<div class="ld" id="ld">
+  <div class="spin"></div>
+  <div class="ld-txt" id="ldTxt">–</div>
+  <div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<!-- STICHPROBEN-MODAL -->
+<div id="stichModal" style="display:none;position:fixed;inset:0;z-index:45;background:rgba(5,7,9,.88);backdrop-filter:blur(5px);overflow-y:auto;padding:20px 14px;-webkit-overflow-scrolling:touch">
+  <div style="max-width:420px;margin:auto;background:var(--panel);border:1px solid var(--accent);border-radius:12px;overflow:hidden;font-family:'IBM Plex Mono',monospace;font-size:18px">
+    <div style="padding:11px 14px;background:#050709;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-weight:700;font-size:19.5px;color:#dce8ff">📋 Stichproben-Abnahme</div>
+        <div id="stichSub" style="font-size:13.5px;color:var(--muted);margin-top:2px"></div>
+      </div>
+      <button class="btn btn-s" id="stichClose" style="padding:3px 9px;flex-shrink:0;touch-action:manipulation">✕</button>
+    </div>
+    <div id="stichBody" style="padding:12px 14px;display:flex;flex-direction:column;gap:8px"></div>
+    <div style="padding:0 14px 10px">
+      <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px">Kommentar</div>
+      <textarea id="stichKomm" rows="2" style="width:100%;background:#080a0f;border:1px solid var(--border);border-radius:6px;padding:7px;color:var(--text);font-family:inherit;font-size:16.5px;resize:none;outline:none;line-height:1.5" placeholder="Bemerkungen zur Stichprobe…"></textarea>
+    </div>
+    <div style="padding:0 14px 12px;display:flex;align-items:center;gap:8px">
+      <input type="file" accept="image/*" capture="environment" id="stichFoto" style="display:none">
+      <button class="btn btn-s" id="stichFotoBtn" style="font-size:15px;touch-action:manipulation">📷 Foto</button>
+      <span id="stichFotoName" style="font-size:15px;color:var(--muted)"></span>
+    </div>
+    <img id="stichFotoImg" style="display:none;width:100%;max-height:150px;object-fit:cover;border-top:1px solid var(--border)">
+    <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <button class="btn" id="stichOk"  style="flex:1;padding:11px;font-size:18px;background:#0a2010;border:2px solid #00cc66;color:#00cc66;touch-action:manipulation">✓ Bestanden</button>
+      <button class="btn" id="stichAbw" style="flex:1;padding:11px;font-size:18px;background:#1a1000;border:2px solid #ffaa00;color:#ffaa00;touch-action:manipulation">⚠ Abweichung</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.module.js';
+
+const PAL=['#00c8ff','#ff6b35','#00e676','#ff4081','#ffeb3b','#7c4dff','#ff6d00','#00bcd4','#76ff03','#f50057','#ffd740','#40c4ff','#69f0ae','#ff6e40','#e040fb','#18ffff','#b2ff59','#ff9100','#ea80fc','#ccff90'];
+const cmap={}; let ci=0;
+function gc(k){if(!cmap[k])cmap[k]=PAL[ci++%PAL.length];return cmap[k];}
+function resetColors(){ci=0;Object.keys(cmap).forEach(k=>delete cmap[k]);}
+
+function exType(text,type){
+  // Toleriert Leerzeichen um '=' und vor '(' (z.B. "#60 = IFCxxx (" bei DESITE-Exporten)
+  const r={}, re=new RegExp('(#\\d+)\\s*=\\s*'+type+'\\s*\\(','g'); let m;
+  while((m=re.exec(text))!==null){
+    const eid=m[1],start=m.index+m[0].length;
+    let d=1,j=start;
+    while(j<text.length&&d>0){if(text[j]==='(')d++;else if(text[j]===')')d--;j++;}
+    r[eid]=text.slice(start,j-1);
+  }
+  return r;
+}
+function sv(v){return v?v.replace(/^'|'$/g,'').trim():'';}
+function cv(r){
+  if(!r||r==='$')return '';
+  let v=r.trim().replace(/^IFC[A-Z]+MEASURE\(|^IFCINTEGER\(|^IFCREAL\(|^IFCTEXT\('|^IFCLABEL\('/i,'');
+  return v.replace(/\)$|'\)$/,'').trim().replace(/^'|'$/g,'');
+}
+// HTML-Escaping gegen kaputtes Layout / Injection durch IFC-Werte & Nutzereingaben
+const _ESC={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>_ESC[c]);}
+// STEP-Kodierung: ASCII direkt (Apostroph verdoppeln, Backslash escapen),
+// Nicht-ASCII als \X2\<UTF-16BE-Hex>\X0\ (IFC-konform für Umlaute etc.)
+function ifcEscape(s){
+  let out='',i=0;s=String(s);
+  while(i<s.length){
+    const code=s.charCodeAt(i);
+    if(code<128){const ch=s[i];out+=ch==="'"?"''":ch==='\\'?'\\\\':ch;i++;}
+    else{let hex='';while(i<s.length&&s.charCodeAt(i)>=128){hex+=s.charCodeAt(i).toString(16).toUpperCase().padStart(4,'0');i++;}out+='\\X2\\'+hex+'\\X0\\';}
+  }
+  return out;
+}
+
+function parseIFC(text){
+  setP(10,'Punktlisten...');
+  const ptl={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCCARTESIANPOINTLIST3D'))){
+    const pts=[]; const re=/\(\s*([-\d.E+]+)\s*,\s*([-\d.E+]+)\s*,\s*([-\d.E+]+)\s*\)/g; let pm;
+    while((pm=re.exec(args))!==null) pts.push([parseFloat(pm[1]),parseFloat(pm[2]),parseFloat(pm[3])]);
+    ptl[eid]=pts;
+  }
+  setP(25,'Dreiecksnetze...');
+  const fsets={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCTRIANGULATEDFACESET'))){
+    const plId=args.match(/#\d+/)?.[0];
+    const tris=[]; const re=/\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g; let tm;
+    while((tm=re.exec(args))!==null) tris.push([parseInt(tm[1])-1,parseInt(tm[2])-1,parseInt(tm[3])-1]);
+    fsets[eid]={plId,tris};
+  }
+  setP(35,'ShapeReps...');
+  const reps={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCSHAPEREPRESENTATION'))){
+    const m=args.match(/\(([^)]+)\)\s*$/); if(m) reps[eid]=[...m[1].matchAll(/#\d+/g)].map(x=>x[0]);
+  }
+  const prods={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCPRODUCTDEFINITIONSHAPE'))){
+    const m=args.match(/\(([^)]+)\)\s*$/); if(m) prods[eid]=[...m[1].matchAll(/#\d+/g)].map(x=>x[0]);
+  }
+  // Darstellungs-Layer: IFCPRESENTATIONLAYERASSIGNMENT('Name',$,(#repItems),$)
+  // → ordnet jedem referenzierten ShapeRep den Layernamen zu (für Layer-Filter).
+  const rep2layer={};
+  for(const [,args] of Object.entries(exType(text,'IFCPRESENTATIONLAYERASSIGNMENT'))){
+    const nm=(args.match(/'([^']*)'/)||[])[1]||'';
+    const m=args.match(/\(([^)]*)\)/);
+    if(nm&&m)for(const rid of [...m[1].matchAll(/#\d+/g)].map(x=>x[0]))rep2layer[rid]=nm;
+  }
+  setP(45,'Properties...');
+  const props={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCPROPERTYSINGLEVALUE'))){
+    const parts=args.split(','); props[eid]={name:sv(parts[0]),value:cv(parts[2])};
+  }
+  const psets={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCPROPERTYSET'))){
+    const names=[...args.matchAll(/'([^']+)'/g)].map(m=>m[1]);
+    const m=args.match(/\(([^)]+)\)\s*$/);
+    psets[eid]={name:names[1]||'',propIds:m?[...m[1].matchAll(/#\d+/g)].map(x=>x[0]):[]};
+  }
+  const el2ps={};
+  for(const [,args] of Object.entries(exType(text,'IFCRELDEFINESBYPROPERTIES'))){
+    const ids=[...args.matchAll(/#\d+/g)].map(x=>x[0]);
+    const psid=ids[ids.length-1];
+    const m=args.match(/\(([^)]+)\)/);
+    if(m) for(const el of [...m[1].matchAll(/#\d+/g)].map(x=>x[0])){if(!el2ps[el])el2ps[el]=[];el2ps[el].push(psid);}
+  }
+  setP(60,'Zentrum...');
+  let sx=0,sy=0,sz=0,n=0;
+  for(const pts of Object.values(ptl)){for(const[x,y,z]of pts){sx+=x;sy+=y;sz+=z;n++;}if(n>5000)break;}
+  const cx=n?sx/n:0,cy=n?sy/n:0,cz=n?sz/n:0;
+  // Längeneinheit aus IFCUNITASSIGNMENT bestimmen. IFC-Dateien deklarieren oft
+  // mehrere SI-Einheiten (METRE, MILLI, CENTI) gleichzeitig – nur die per
+  // UNITASSIGNMENT zugeordnete ist die echte Projekteinheit. Fallback: erste
+  // LENGTHUNIT-Deklaration (wie bisher).
+  let scale=1;
+  const siUnits={};
+  for(const mu of text.matchAll(/(#\d+)\s*=\s*IFCSIUNIT\s*\(([^)]*)\)/g))siUnits[mu[1]]=mu[2];
+  let lenU='';
+  const ua=text.match(/IFCUNITASSIGNMENT\s*\(\s*\(([^)]*)\)/);
+  if(ua)for(const id of [...ua[1].matchAll(/#\d+/g)].map(x=>x[0])){const u=siUnits[id];if(u&&u.includes('LENGTHUNIT')){lenU=u;break;}}
+  if(!lenU){const f=text.match(/IFCSIUNIT\s*\([^)]*LENGTHUNIT[^)]*\)/);lenU=f?f[0]:'';}
+  if(lenU.includes('MILLI'))scale=0.001;
+  else if(lenU.includes('CENTI'))scale=0.01;
+  else if(lenU.includes('MICRO'))scale=1e-6;
+  setP(70,'Objekte...');
+  const objs=[];
+  // Bewehrung kann je nach Export als IFCREINFORCINGBAR oder als generischer
+  // IFCBUILDINGELEMENTPROXY vorliegen (z.B. nach DESITE / Layer-Konfigurator).
+  // Beide haben dieselbe Argumentstruktur (GUID=0, Name=2, Repräsentation=6).
+  const ELEM_TYPES=['IFCREINFORCINGBAR','IFCBUILDINGELEMENTPROXY'];
+  const elemEnts={};
+  for(const t of ELEM_TYPES)Object.assign(elemEnts,exType(text,t));
+  for(const [eid,args] of Object.entries(elemEnts)){
+    const parts=args.split(',');
+    const guid=sv(parts[0]),name=sv(parts[2])||'ReinforcingBar',shapeId=parts[6]?.trim();
+    const ap={};const propEids={};
+    for(const psid of (el2ps[eid]||[])){const ps=psets[psid];if(!ps)continue;for(const pid of ps.propIds){const p=props[pid];if(p?.name){ap[p.name]=p.value;propEids[p.name]=pid;}}}
+    // Darstellungs-Layer als LAYER-Feld ergänzen, falls keine LAYER-Property existiert
+    if(ap['LAYER']===undefined&&shapeId&&prods[shapeId]){
+      for(const rid of prods[shapeId]){if(rep2layer[rid]){ap['LAYER']=rep2layer[rid];break;}}
+    }
+    let fsId=null;
+    if(shapeId&&prods[shapeId]){for(const rid of prods[shapeId]){if(reps[rid]){for(const iid of reps[rid]){if(fsets[iid]){fsId=iid;break;}}if(fsId)break;}}}
+    let geo=null;
+    if(fsId){
+      const fs=fsets[fsId],pts=ptl[fs.plId];
+      if(pts?.length){
+        const pos=new Float32Array(fs.tris.length*9),nor=new Float32Array(fs.tris.length*9);
+        let pi=0;
+        for(const [i0,i1,i2] of fs.tris){
+          const p0=pts[i0],p1=pts[i1],p2=pts[i2]; if(!p0||!p1||!p2){pi+=9;continue;}
+          const v=[[( p0[0]-cx)*scale,(p0[2]-cz)*scale,-(p0[1]-cy)*scale],
+                   [(p1[0]-cx)*scale,(p1[2]-cz)*scale,-(p1[1]-cy)*scale],
+                   [(p2[0]-cx)*scale,(p2[2]-cz)*scale,-(p2[1]-cy)*scale]];
+          const ax=v[1][0]-v[0][0],ay=v[1][1]-v[0][1],az=v[1][2]-v[0][2];
+          const bx=v[2][0]-v[0][0],by=v[2][1]-v[0][1],bz=v[2][2]-v[0][2];
+          const nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx,nl=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;
+          for(let k=0;k<3;k++){pos[pi]=v[k][0];pos[pi+1]=v[k][1];pos[pi+2]=v[k][2];nor[pi]=nx/nl;nor[pi+1]=ny/nl;nor[pi+2]=nz/nl;pi+=3;}
+        }
+        geo={pos,nor};
+      }
+    }
+    objs.push({id:eid,guid,name,pos:ap['Pos_Nr.']||ap['Position number']||'',props:ap,geo,propEids});
+  }
+  return objs;
+}
+
+class OC{
+  constructor(cam,el){
+    this.cam=cam; this.target=new THREE.Vector3();
+    this.sph=new THREE.Spherical(); this.sph.setFromVector3(new THREE.Vector3().subVectors(cam.position,this.target));
+    this._dt=0;this._dp=0;this._pan=new THREE.Vector3();
+    this._t1=null;this._pd=0;
+    let mb=-1,ms={x:0,y:0};
+    el.addEventListener('mousedown',e=>{if(boxMode||measureMode)return;mb=e.button;ms={x:e.clientX,y:e.clientY};});
+    el.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.08:0.92;this.sph.radius=Math.max(0.00001,Math.min(5000,this.sph.radius*f));this.sync();},{passive:false});
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+    window.addEventListener('mousemove',e=>{
+      if(boxMode||measureMode)return;
+      if(mb===0){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._dt-=dx*0.005;this._dp-=dy*0.005;ms={x:e.clientX,y:e.clientY};}
+      if(mb===2||mb===1){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._pan.add(new THREE.Vector3(-dx,dy,0).multiplyScalar(this.sph.radius*0.001).applyQuaternion(cam.quaternion));ms={x:e.clientX,y:e.clientY};}
+    });
+    window.addEventListener('mouseup',()=>{mb=-1;});
+    let tapStart=null,tapMoved=false;
+    el.addEventListener('touchstart',e=>{
+      if(boxMode||measureMode)return;
+      if(e.touches.length===1){this._t1={x:e.touches[0].clientX,y:e.touches[0].clientY};this._pd=0;tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};tapMoved=false;}
+      else if(e.touches.length===2){const t0=e.touches[0],t1=e.touches[1];this._pd=Math.hypot(t1.clientX-t0.clientX,t1.clientY-t0.clientY);this._t1={x:(t0.clientX+t1.clientX)/2,y:(t0.clientY+t1.clientY)/2};tapStart=null;}
+    },{passive:true});
+    el.addEventListener('touchmove',e=>{
+      if(boxMode||measureMode)return;
+      e.preventDefault();
+      if(e.touches.length===1&&this._pd===0){
+        const t=e.touches[0];
+        if(this._t1){const dx=t.clientX-this._t1.x,dy=t.clientY-this._t1.y;this._dt-=dx*0.003;this._dp-=dy*0.003;if(Math.hypot(dx,dy)>8)tapMoved=true;}
+        this._t1={x:t.clientX,y:t.clientY};
+      } else if(e.touches.length===2){
+        const t0=e.touches[0],t1=e.touches[1];
+        const nd=Math.hypot(t1.clientX-t0.clientX,t1.clientY-t0.clientY);
+        const mx=(t0.clientX+t1.clientX)/2,my=(t0.clientY+t1.clientY)/2;
+        if(this._pd>1&&nd>1){const delta=nd-this._pd;this.sph.radius=Math.max(0.00001,Math.min(5000,this.sph.radius*Math.pow(0.975,delta)));this.sync();}
+        this._pd=nd;
+        if(this._t1){const dx=mx-this._t1.x,dy=my-this._t1.y;this._pan.add(new THREE.Vector3(-dx,dy,0).multiplyScalar(this.sph.radius*0.002).applyQuaternion(cam.quaternion));}
+        this._t1={x:mx,y:my};
+        tapMoved=true;
+      }
+    },{passive:false});
+    el.addEventListener('touchend',e=>{
+      if(boxMode||measureMode)return;
+      if(e.touches.length===0){
+        if(!tapMoved&&tapStart&&Date.now()-tapStart.t<300){doRaycast(tapStart.x,tapStart.y);}
+        this._t1=null;this._pd=0;tapStart=null;
+      } else if(e.touches.length===1){this._t1={x:e.touches[0].clientX,y:e.touches[0].clientY};this._pd=0;}
+    },{passive:true});
+  }
+  update(){
+    this.sph.theta+=this._dt;this.sph.phi+=this._dp;
+    this.sph.phi=Math.max(.05,Math.min(Math.PI-.05,this.sph.phi));
+    this.target.add(this._pan); this.sync();
+    this._dt*=.75;this._dp*=.75;this._pan.multiplyScalar(.75);
+  }
+  sync(){const o=new THREE.Vector3();o.setFromSpherical(this.sph);this.cam.position.copy(this.target).add(o);this.cam.lookAt(this.target);}
+  fitTo(box){const c=box.getCenter(new THREE.Vector3()),s=box.getSize(new THREE.Vector3()),d=Math.max(s.x,s.y,s.z);this.target.copy(c);this.sph.radius=d*1.8;this.sph.phi=Math.PI/3;this.sph.theta=Math.PI/6;this.sync();}
+}
+
+let BARS=[],editMap={},selId=null,fltGrp=null,srch='',fldFlt='',valFlt='',sortF='grp',sortA=true,fname='',COLS=[],rawIFC='';
+let boxMode=false,isolateMode=false,measureMode=false;
+let grpField='Pos_Nr.';
+function grp(b){
+  if(grpField==='__type__')return b.name||'?';
+  if(grpField==='__pos__')return b.pos||'?';
+  return b.props[grpField]||b.pos||'?';
+}
+
+let scene,camera,renderer,oc,meshes=[],posG={};
+let lastTouchEnd=0; // unterdrückt den vom Browser nach touchend erzeugten Synthetik-Click (iPad-Doppel-Tap-Fix)
+const MARK_COL=new THREE.Color(0xff4400);
+const marked=new Set();
+let markedHidden=false,ghostMode=false;
+const visGroups=new Set(); // im Viewer ausgewählte Gruppen (leer = alle anzeigen)
+const DEFAULT_INFO=['Pos_Nr.','Stabdurchmesser','NominalDiameter','BarLength','Masse','Materialguete','LAYER','Werkstoff','Shape code','BarDistance','BarCount'];
+let infoKeys=new Set(DEFAULT_INFO),infoAllKeys=[],lastInfoUD=null;
+let sumKeys=new Set(['BarCount','BarLength','Masse']),sumAllKeys=[];
+const protokoll={};
+let abCurPos=null;
+
+function setP(p,t){document.getElementById('pf').style.width=p+'%';document.getElementById('ldTxt').textContent=t;}
+function tick(){return new Promise(r=>setTimeout(r,10));}
+function toast(msg,type){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.borderColor=type==='err'?'var(--err)':type==='warn'?'var(--warn)':'var(--accent)';
+  t.style.color=type==='err'?'var(--err)':type==='warn'?'var(--warn)':'var(--accent)';
+  t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);
+}
+function fmtVal(k,v){
+  const n=parseFloat(v); if(isNaN(n))return v;
+  if(k==='BarDistance')return (n*100).toFixed(1)+' cm';
+  if(k==='BarLength'||k==='Einzelstablaenge')return n.toFixed(2)+' m';
+  if(k==='Masse'||k==='Weight'||k==='BarWeightTotal')return n.toFixed(3)+' kg';
+  if(k==='NominalDiameter')return (n*1000).toFixed(0)+' mm';
+  if(k==='Stabdurchmesser')return n.toFixed(0)+' mm';
+  return v;
+}
+
+function showOv(v){document.getElementById('ov').style.display=v?'flex':'none';}
+function showLd(v){document.getElementById('ld').classList.toggle('show',v);}
+
+async function loadFile(file){
+  fname=file.name;
+  showOv(false);showLd(true);setP(0,'Lese Datei...');
+  await tick();
+  const text=await file.text();
+  rawIFC=text;
+  setP(5,'Parse IFC...');await tick();
+  const objs=parseIFC(text);
+  if(!objs.length){toast('Keine Objekte gefunden','err');showLd(false);showOv(true);return;}
+  BARS=objs;editMap={};selId=null;fltGrp=null;marked.clear();markedHidden=false;
+  resetColors();
+  grpField=BARS.some(b=>b.props['Pos_Nr.'])?'Pos_Nr.':BARS.some(b=>b.pos)?'__pos__':'__type__';
+  const allFields=new Set();BARS.forEach(b=>Object.keys(b.props).forEach(k=>allFields.add(k)));
+  const gb=document.getElementById('groupBy');
+  gb.innerHTML='<option value="__type__">IFC-Typ</option><option value="__pos__">Pos. (intern)</option>';
+  [...allFields].sort().forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;if(k===grpField)o.selected=true;gb.appendChild(o);});
+  const ff=document.getElementById('fieldFlt');ff.innerHTML='<option value="">Alle Felder</option>';
+  [...allFields].sort().forEach(k=>{const o=document.createElement('option');o.value=k;o.textContent=k;ff.appendChild(o);});
+  srch='';fldFlt='';valFlt='';document.getElementById('search').value='';populateValFlt();
+  infoAllKeys=[...allFields].sort();
+  sumAllKeys=[...allFields].filter(k=>BARS.some(b=>!isNaN(parseFloat(b.props[k])))).sort();
+  setP(85,'3D-Szene...');await tick();
+  build3D(objs);
+  setP(100,'Fertig!');await tick();
+  showLd(false);
+  document.getElementById('fileInfo').textContent=fname;
+  document.getElementById('statusBadge').style.display='flex';
+  document.getElementById('statusTxt').textContent=BARS.length+' Objekte';
+  document.getElementById('btnCSV').disabled=false;
+  document.getElementById('btnIFC').disabled=false;
+  buildGrpList();buildTableHead();renderTable();
+  toast(BARS.length+' Objekte geladen');
+}
+
+document.getElementById('btnChoose').addEventListener('click',()=>document.getElementById('fileIn').click());
+document.getElementById('fileIn').addEventListener('change',e=>{const f=e.target.files[0];if(f)loadFile(f);e.target.value='';});
+document.getElementById('btnNewFile').addEventListener('click',()=>document.getElementById('fileIn').click());
+const dz=document.getElementById('dz');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+dz.addEventListener('drop',e=>{e.preventDefault();dz.classList.remove('drag');const f=e.dataTransfer.files[0];if(f&&f.name.endsWith('.ifc'))loadFile(f);});
+dz.addEventListener('click',e=>{if(e.target.tagName!=='BUTTON')document.getElementById('fileIn').click();});
+document.addEventListener('dragover',e=>e.preventDefault());
+document.addEventListener('drop',e=>{e.preventDefault();const f=e.dataTransfer.files[0];if(f&&f.name.endsWith('.ifc'))loadFile(f);});
+
+function switchTab(t){
+  ['Editor','Viewer','Abnahme'].forEach(id=>{
+    document.getElementById('panel'+id).classList.toggle('active',t===id.toLowerCase());
+    document.getElementById('tab'+id).classList.toggle('active',t===id.toLowerCase());
+  });
+  if(t==='abnahme')buildAbList();
+}
+document.getElementById('tabEditor').addEventListener('click',()=>switchTab('editor'));
+document.getElementById('tabViewer').addEventListener('click',()=>switchTab('viewer'));
+document.getElementById('tabAbnahme').addEventListener('click',()=>switchTab('abnahme'));
+
+function initThree(){
+  if(scene)return;
+  const canvas=document.getElementById('vc');
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0d12);
+  camera=new THREE.PerspectiveCamera(45,1,.0001,10000);camera.position.set(5,4,8);
+  oc=new OC(camera,canvas);
+  scene.add(new THREE.AmbientLight(0x8899bb,.7));
+  const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(5,10,7);scene.add(dl);
+  scene.add(new THREE.GridHelper(50,50,0x1c2130,0x141a28));
+  function rz(){const w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}}
+  function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();}
+  loop();
+  canvas.addEventListener('touchend',()=>{lastTouchEnd=Date.now();},{passive:true});
+  canvas.addEventListener('click',e=>{if(Date.now()-lastTouchEnd<700)return;if(!boxMode)doRaycast(e.clientX,e.clientY);});
+}
+
+function build3D(objs){
+  initThree();
+  for(const m of meshes)scene.remove(m);meshes=[];posG={};
+  barSnapCache.clear();clearMeasures();
+  for(const bar of objs){
+    if(!bar.geo)continue;
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(bar.geo.pos,3));
+    geo.setAttribute('normal',new THREE.BufferAttribute(bar.geo.nor,3));
+    const mat=new THREE.MeshStandardMaterial({color:0x00c8ff,roughness:.4,metalness:.55});
+    const mesh=new THREE.Mesh(geo,mat);
+    mesh.userData={id:bar.id,bar,props:bar.props,grp:'',hidden:false,marked:false};
+    scene.add(mesh);meshes.push(mesh);
+  }
+  const box=new THREE.Box3();meshes.forEach(m=>box.expandByObject(m));
+  if(!box.isEmpty())oc.fitTo(box);
+  document.getElementById('vEmpty').style.display='none';
+  document.getElementById('vHud').style.display='flex';
+  document.getElementById('vStats').style.display='flex';
+  document.getElementById('vStatObjs').textContent=meshes.length+' Obj.';
+  updateV3D();
+  calibrateMeasureScale();
+}
+
+function updateV3D(){
+  posG={};resetColors();
+  for(const m of meshes){
+    const g=grp(m.userData.bar);m.userData.grp=g;
+    if(marked.has(m.userData.id)){m.material.color.copy(MARK_COL);m.material.emissive.set(0xff2200);m.material.emissiveIntensity=.4;}
+    else{m.material.color.set(gc(g));m.material.emissive.set(0);m.material.emissiveIntensity=0;}
+    m.userData.hidden=markedHidden&&marked.has(m.userData.id);
+    applyVis(m);
+    if(!posG[g])posG[g]={color:cmap[g],cnt:0};posG[g].cnt++;
+  }
+  // stale Gruppen aus Auswahl entfernen (z.B. nach Wechsel des Gruppier-Feldes)
+  for(const g of [...visGroups])if(!posG[g])visGroups.delete(g);
+  const vl=document.getElementById('vList');vl.innerHTML='';
+  const ai=document.createElement('div');ai.className='si'+(visGroups.size===0?' active':'');
+  ai.innerHTML='<div class="si-dot" style="background:#4a5570"></div><span>Alle</span><span class="si-cnt">'+meshes.length+'</span>';
+  ai.addEventListener('click',()=>{visGroups.clear();applyGroupFilter();syncGroupActive();});
+  vl.appendChild(ai);
+  Object.entries(posG).sort((a,b)=>{const an=parseInt(a[0]),bn=parseInt(b[0]);return isNaN(an)||isNaN(bn)?a[0].localeCompare(b[0]):an-bn;}).forEach(([g,d])=>{
+    const item=document.createElement('div');item.className='si'+(visGroups.has(g)?' active':'');item.dataset.grp=g;
+    const lbl=g.length>18?g.slice(0,16)+'...':g;
+    item.innerHTML='<div class="si-dot" style="background:'+d.color+'"></div><span title="'+esc(g)+'">'+esc(lbl)+'</span><span class="si-cnt">'+d.cnt+'</span>';
+    function toggle(){if(visGroups.has(g))visGroups.delete(g);else visGroups.add(g);applyGroupFilter();syncGroupActive();}
+    item.addEventListener('click',toggle);
+    item.addEventListener('touchend',e=>{e.preventDefault();toggle();},{passive:false});
+    vl.appendChild(item);
+  });
+  document.getElementById('vFoot').textContent=Object.keys(posG).length+' Gr.';
+  document.getElementById('vStatGrp').textContent=Object.keys(posG).length+' Gruppen';
+}
+
+function applyVis(m){
+  const isol=isolateMode&&!marked.has(m.userData.id);
+  if(m.userData.hidden||isol){
+    if(ghostMode){m.visible=true;m.material.opacity=isol?.06:.25;m.material.transparent=true;}
+    else{m.visible=false;m.material.opacity=1;m.material.transparent=false;}
+  } else {m.visible=true;m.material.opacity=1;m.material.transparent=false;}
+}
+function allVis(){visGroups.clear();meshes.forEach(m=>{m.userData.hidden=markedHidden&&marked.has(m.userData.id);applyVis(m);});syncGroupActive();}
+// Sichtbarkeit nach Mehrfach-Auswahl: leer = alle, sonst nur gewählte Gruppen
+function applyGroupFilter(){
+  meshes.forEach(m=>{
+    const inSel=visGroups.size===0||visGroups.has(m.userData.grp);
+    m.userData.hidden=!inSel||(markedHidden&&marked.has(m.userData.id));
+    applyVis(m);
+  });
+}
+// Aktiv-Markierung der Listeneinträge an visGroups angleichen
+function syncGroupActive(){
+  const vl=document.getElementById('vList');if(!vl)return;
+  vl.querySelectorAll('.si').forEach(i=>{
+    if(i.dataset.grp!==undefined)i.classList.toggle('active',visGroups.has(i.dataset.grp));
+    else i.classList.toggle('active',visGroups.size===0); // "Alle"
+  });
+}
+
+const rc=new THREE.Raycaster();const mouse=new THREE.Vector2();
+function doRaycast(cx,cy){
+  const canvas=document.getElementById('vc');const rect=canvas.getBoundingClientRect();
+  mouse.x=((cx-rect.left)/rect.width)*2-1;
+  mouse.y=-((cy-rect.top)/rect.height)*2+1;
+  rc.setFromCamera(mouse,camera);
+  const hits=rc.intersectObjects(meshes.filter(m=>m.visible&&m.material.opacity>0.1));
+  if(measureMode){
+    if(hits.length){
+      const snap=getSnapPoint(hits[0].object,hits[0].point,cx,cy);
+      currentSnapPoint=snap.pt;
+      showSnapIndicator(snap.pt,snap.type);
+      doMeasure(hits[0]);
+    }
+    return;
+  }
+  if(hits.length){toggleMark(hits[0].object);showVInfo(hits[0].object.userData);}
+  else document.getElementById('vInfo').classList.remove('show');
+}
+
+function toggleMark(mesh){
+  const id=mesh.userData.id;
+  if(marked.has(id)){marked.delete(id);mesh.userData.marked=false;mesh.material.color.set(gc(mesh.userData.grp));mesh.material.emissive.set(0);mesh.material.emissiveIntensity=0;}
+  else{marked.add(id);mesh.userData.marked=true;mesh.material.color.copy(MARK_COL);mesh.material.emissive.set(0xff2200);mesh.material.emissiveIntensity=.4;}
+  updateMP();
+}
+
+function updateMP(){
+  const cnt=marked.size;
+  const mp=document.getElementById('mp');
+  document.getElementById('hbClear').style.display=cnt?'flex':'none';
+  if(!cnt){mp.style.display='none';return;}
+  mp.style.display='block';
+  document.getElementById('mpCount').textContent=cnt+' Stab'+(cnt!==1?'e':'')+' markiert';
+  let totals={},posCnts={};
+  for(const m of meshes){
+    if(!marked.has(m.userData.id))continue;
+    const p=m.userData.props;const pos=m.userData.grp||'?';
+    posCnts[pos]=(posCnts[pos]||0)+1;
+    for(const k of sumKeys){const v=parseFloat(p[k]||0);if(!isNaN(v)&&v)totals[k]=(totals[k]||0)+v;}
+  }
+  const bc=totals['BarCount']||totals['Stabanzahl_Verlegung']||cnt;
+  let html='<div class="vir"><span class="vik">Stabanzahl</span><span class="viv">'+Math.round(bc)+' Stk.</span></div>';
+  for(const k of sumKeys){
+    if(k==='BarCount'||k==='Stabanzahl_Verlegung')continue;
+    if(totals[k]!==undefined)html+='<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(fmtVal(k,totals[k]))+'</span></div>';
+  }
+  const pe=Object.entries(posCnts).sort((a,b)=>parseInt(a[0])-parseInt(b[0]));
+  if(pe.length<=6)pe.forEach(([g,c])=>{html+='<div class="vir"><span class="vik">Pos. '+esc(g)+'</span><span class="viv" style="color:#ff9966">'+c+'x</span></div>';});
+  else html+='<div style="font-size:10px;color:var(--muted)">'+pe.length+' Positionen</div>';
+  document.getElementById('mpRows').innerHTML=html;
+}
+
+function showVInfo(ud){
+  lastInfoUD=ud;
+  const el=document.getElementById('vInfo');el.classList.add('show');
+  const isMark=marked.has(ud.id);
+  document.getElementById('vInfoTitle').innerHTML='<span style="color:'+(isMark?'#ff4400':'var(--accent)')+'">'+(isMark?'? ':'')+esc(ud.grp)+'</span>';
+  let html='';
+  const keysToShow=infoKeys.size>0?[...infoKeys]:infoAllKeys;
+  for(const k of keysToShow)if(ud.props[k]!==undefined&&ud.props[k]!=='')html+='<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(fmtVal(k,ud.props[k]))+'</span></div>';
+  document.getElementById('vInfoRows').innerHTML=html||'<div style="color:var(--muted);font-size:10px">-</div>';
+  document.getElementById('vMarkHint').textContent=isMark?'Nochmal tippen = entmarkieren':'Tippen = markieren';
+  document.getElementById('vMarkHint').style.color=isMark?'#ff4400':'var(--muted)';
+}
+
+document.getElementById('hbReset').addEventListener('click',()=>{const box=new THREE.Box3();meshes.forEach(m=>box.expandByObject(m));if(!box.isEmpty())oc.fitTo(box);});
+document.getElementById('hbTop').addEventListener('click',()=>{const box=new THREE.Box3();meshes.forEach(m=>box.expandByObject(m));if(!box.isEmpty()){const c=box.getCenter(new THREE.Vector3()),s=box.getSize(new THREE.Vector3());oc.target.copy(c);oc.sph.radius=Math.max(s.x,s.z)*2;oc.sph.phi=.01;oc.sph.theta=0;oc.sync();}});
+document.getElementById('hbAll').addEventListener('click',()=>{allVis();});
+document.getElementById('hbGhost').addEventListener('click',()=>{ghostMode=!ghostMode;document.getElementById('hbGhost').classList.toggle('ghost-on',ghostMode);meshes.forEach(m=>applyVis(m));});
+document.getElementById('hbClear').addEventListener('click',()=>{
+  marked.clear();markedHidden=false;isolateMode=false;
+  document.getElementById('mpHide').style.display='flex';document.getElementById('mpShow').style.display='none';
+  document.getElementById('mpIso').style.display='';document.getElementById('mpIsoOff').style.display='none';
+  meshes.forEach(m=>{m.userData.marked=false;m.userData.hidden=false;m.visible=true;m.material.opacity=1;m.material.transparent=false;m.material.color.set(gc(m.userData.grp));m.material.emissive.set(0);m.material.emissiveIntensity=0;});
+  updateMP();
+});
+document.getElementById('mpHide').addEventListener('click',()=>{
+  isolateMode=false;document.getElementById('mpIso').style.display='';document.getElementById('mpIsoOff').style.display='none';
+  markedHidden=true;document.getElementById('mpHide').style.display='none';document.getElementById('mpShow').style.display='flex';
+  meshes.forEach(m=>{if(marked.has(m.userData.id)){m.userData.hidden=true;applyVis(m);}});
+});
+document.getElementById('mpShow').addEventListener('click',()=>{
+  markedHidden=false;document.getElementById('mpHide').style.display='flex';document.getElementById('mpShow').style.display='none';
+  meshes.forEach(m=>{if(marked.has(m.userData.id)){m.userData.hidden=false;applyVis(m);}});
+});
+document.getElementById('mpClear').addEventListener('click',()=>document.getElementById('hbClear').click());
+document.getElementById('mpIso').addEventListener('click',()=>{
+  // Isolieren: nur Markierte sichtbar, Rest ausblenden
+  markedHidden=false;isolateMode=true;
+  document.getElementById('mpHide').style.display='flex';document.getElementById('mpShow').style.display='none';
+  document.getElementById('mpIso').style.display='none';document.getElementById('mpIsoOff').style.display='';
+  meshes.forEach(m=>{m.userData.hidden=false;applyVis(m);});
+  // Kamera auf markierte Objekte einzoomen
+  const box=new THREE.Box3();
+  meshes.filter(m=>marked.has(m.userData.id)).forEach(m=>box.expandByObject(m));
+  if(!box.isEmpty())oc.fitTo(box);
+  toast('Isoliert · '+marked.size+' Stäbe');
+});
+document.getElementById('mpIsoOff').addEventListener('click',()=>{
+  isolateMode=false;
+  document.getElementById('mpIso').style.display='';document.getElementById('mpIsoOff').style.display='none';
+  meshes.forEach(m=>{m.userData.hidden=markedHidden&&marked.has(m.userData.id);applyVis(m);});
+  toast('Alle sichtbar');
+});
+
+function buildAttrList(cid,selSet,allKeys,onCh,accent){
+  const c=document.getElementById(cid);c.innerHTML='';
+  for(const k of allKeys){
+    const ch=selSet.has(k);
+    const row=document.createElement('label');row.style.cssText='display:flex;align-items:center;gap:7px;padding:4px 3px;cursor:pointer;';
+    row.innerHTML='<input type="checkbox" '+(ch?'checked':'')+' style="width:15px;height:15px;accent-color:'+(accent||'var(--accent)')+';cursor:pointer"><span style="font-size:10px;color:'+(ch?'#dce8ff':'var(--muted)')+'">'+k+'</span>';
+    const cb=row.querySelector('input');
+    cb.addEventListener('change',e=>{if(e.target.checked)selSet.add(k);else selSet.delete(k);row.querySelector('span').style.color=e.target.checked?'#dce8ff':'var(--muted)';onCh();});
+    c.appendChild(row);
+  }
+}
+document.getElementById('vInfoCfg').addEventListener('click',()=>{buildAttrList('vInfoAttrList',infoKeys,infoAllKeys,()=>{if(lastInfoUD)showVInfo(lastInfoUD);});document.getElementById('vInfoSettings').style.display='block';document.getElementById('vInfo').style.display='none';});
+document.getElementById('vInfoCfgClose').addEventListener('click',()=>{document.getElementById('vInfoSettings').style.display='none';if(lastInfoUD){document.getElementById('vInfo').style.display='block';showVInfo(lastInfoUD);}});
+document.getElementById('vInfoAll').addEventListener('click',()=>{infoKeys=new Set(infoAllKeys);buildAttrList('vInfoAttrList',infoKeys,infoAllKeys,()=>{if(lastInfoUD)showVInfo(lastInfoUD);});if(lastInfoUD)showVInfo(lastInfoUD);});
+document.getElementById('vInfoNone').addEventListener('click',()=>{infoKeys.clear();buildAttrList('vInfoAttrList',infoKeys,infoAllKeys,()=>{if(lastInfoUD)showVInfo(lastInfoUD);});if(lastInfoUD)showVInfo(lastInfoUD);});
+document.getElementById('mpCfg').addEventListener('click',()=>{buildAttrList('mpAttrList',sumKeys,sumAllKeys,updateMP,'#ff4400');document.getElementById('mpSettings').style.display='block';document.getElementById('mp').style.display='none';});
+document.getElementById('mpCfgClose').addEventListener('click',()=>{document.getElementById('mpSettings').style.display='none';if(marked.size)document.getElementById('mp').style.display='block';});
+document.getElementById('mpAll').addEventListener('click',()=>{sumKeys=new Set(sumAllKeys);buildAttrList('mpAttrList',sumKeys,sumAllKeys,updateMP,'#ff4400');updateMP();});
+document.getElementById('mpNone').addEventListener('click',()=>{sumKeys.clear();buildAttrList('mpAttrList',sumKeys,sumAllKeys,updateMP,'#ff4400');updateMP();});
+['vInfoCfg','vInfoCfgClose','vInfoAll','vInfoNone','mpCfg','mpCfgClose','mpAll','mpNone','mpHide','mpShow','mpClear','mpIso','mpIsoOff','hbReset','hbTop','hbAll','hbGhost','hbClear'].forEach(id=>{
+  const el=document.getElementById(id);if(!el)return;
+  el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
+});
+
+document.getElementById('groupBy').addEventListener('change',()=>{
+  grpField=document.getElementById('groupBy').value;
+  fltGrp=null;resetColors();buildGrpList();buildTableHead();renderTable();if(meshes.length)updateV3D();
+});
+document.getElementById('grpSearch').addEventListener('input',buildGrpList);
+document.getElementById('search').addEventListener('input',()=>{srch=document.getElementById('search').value;renderTable();});
+document.getElementById('fieldFlt').addEventListener('change',()=>{fldFlt=document.getElementById('fieldFlt').value;valFlt='';populateValFlt();renderTable();});
+document.getElementById('valFlt').addEventListener('change',()=>{valFlt=document.getElementById('valFlt').value;renderTable();});
+document.getElementById('btnClearFlt').addEventListener('click',()=>{document.getElementById('search').value='';document.getElementById('fieldFlt').value='';srch='';fldFlt='';valFlt='';populateValFlt();fltGrp=null;buildGrpList();renderTable();});
+
+// Wert-Filter: zeigt die vorhandenen Werte des gewählten Feldes als Dropdown
+function populateValFlt(){
+  const vf=document.getElementById('valFlt');
+  if(!fldFlt){vf.style.display='none';vf.innerHTML='<option value="">Alle Werte</option>';return;}
+  const vals=new Set();
+  BARS.forEach(b=>{const v=Object.assign({},b.props,editMap[b.id]||{})[fldFlt];if(v!==undefined&&v!=='')vals.add(String(v));});
+  const sorted=[...vals].sort((a,b)=>{const an=parseFloat(a),bn=parseFloat(b);return(!isNaN(an)&&!isNaN(bn))?an-bn:a.localeCompare(b);});
+  vf.innerHTML='<option value="">Alle Werte ('+sorted.length+')</option>'+sorted.map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('');
+  vf.value=valFlt;
+  vf.style.display='';
+}
+document.getElementById('btnCSV').addEventListener('click',dlCSV);
+document.getElementById('btnIFC').addEventListener('click',dlIFC);
+document.getElementById('btnReset').addEventListener('click',()=>{editMap={};if(selId)openDet(selId);renderTable();toast('Reset');});
+
+function buildGrpList(){
+  const q=(document.getElementById('grpSearch').value||'').toLowerCase();
+  const gl=document.getElementById('grpList');gl.innerHTML='';
+  const groups={};BARS.forEach(b=>{const g=grp(b);groups[g]=(groups[g]||0)+1;});
+  const sorted=Object.entries(groups).filter(([k])=>k.toLowerCase().includes(q)).sort((a,b)=>{const an=parseInt(a[0]),bn=parseInt(b[0]);return isNaN(an)||isNaN(bn)?a[0].localeCompare(b[0]):an-bn;});
+  const all=document.createElement('div');all.className='si'+(fltGrp===null?' active':'');
+  all.innerHTML='<div class="si-dot" style="background:#4a5570"></div><span>Alle</span><span class="si-cnt">'+BARS.length+'</span>';
+  all.addEventListener('click',()=>{fltGrp=null;buildGrpList();renderTable();});
+  all.addEventListener('touchend',e=>{e.preventDefault();fltGrp=null;buildGrpList();renderTable();},{passive:false});
+  gl.appendChild(all);
+  sorted.forEach(([g,cnt])=>{
+    const item=document.createElement('div');item.className='si'+(fltGrp===g?' active':'');
+    const lbl=g.length>16?g.slice(0,14)+'...':g;
+    item.innerHTML='<div class="si-dot" style="background:'+gc(g)+'"></div><span title="'+esc(g)+'">'+esc(lbl)+'</span><span class="si-cnt">'+cnt+'</span>';
+    item.addEventListener('click',()=>{fltGrp=g;buildGrpList();renderTable();});
+    item.addEventListener('touchend',e=>{e.preventDefault();fltGrp=g;buildGrpList();renderTable();},{passive:false});
+    gl.appendChild(item);
+  });
+  document.getElementById('grpFoot').textContent=sorted.length+' Gruppen';
+}
+
+function getVis(){
+  let rows=BARS.slice();
+  if(fltGrp!==null)rows=rows.filter(b=>grp(b)===fltGrp);
+  if(fldFlt)rows=rows.filter(b=>b.props[fldFlt]!==undefined);
+  if(fldFlt&&valFlt)rows=rows.filter(b=>String(Object.assign({},b.props,editMap[b.id]||{})[fldFlt])===valFlt);
+  if(srch){const q=srch.toLowerCase();rows=rows.filter(b=>b.id.toLowerCase().includes(q)||grp(b).toLowerCase().includes(q)||Object.values(Object.assign({},b.props,editMap[b.id]||{})).some(v=>String(v).toLowerCase().includes(q)));}
+  rows.sort((a,b)=>{
+    const col=COLS.find(c=>c.k===sortF);
+    const ap=Object.assign({},a.props,editMap[a.id]||{}),bp=Object.assign({},b.props,editMap[b.id]||{});
+    const av=col?col.fn(Object.assign({},a,{props:ap})):(ap[sortF]||'');
+    const bv=col?col.fn(Object.assign({},b,{props:bp})):(bp[sortF]||'');
+    const an=parseFloat(av),bn=parseFloat(bv);
+    return(!isNaN(an)&&!isNaN(bn))?(sortA?an-bn:bn-an):(sortA?String(av).localeCompare(String(bv)):String(bv).localeCompare(String(av)));
+  });
+  return rows;
+}
+
+function buildTableHead(){
+  const av=new Set();BARS.forEach(b=>Object.keys(b.props).forEach(k=>av.add(k)));
+  const common=['Stabdurchmesser','NominalDiameter','BarLength','Masse','Materialguete','LAYER'];
+  const gl=grpField==='__type__'?'Typ':grpField==='__pos__'?'Pos.':grpField;
+  COLS=[{k:'grp',label:gl,fn:b=>grp(b)},{k:'id',label:'ID',fn:b=>b.id},
+    ...common.filter(p=>av.has(p)&&p!==grpField).map(p=>({k:p,label:p,fn:b=>b.props[p]||''})),
+    {k:'s',label:'',fn:b=>editMap[b.id]?'*':''}];
+  document.getElementById('thead').innerHTML='<tr>'+COLS.map(c=>'<th data-k="'+esc(c.k)+'">'+esc(c.label)+'</th>').join('')+'</tr>';
+  document.querySelectorAll('#thead th').forEach(th=>{
+    th.addEventListener('click',()=>{const k=th.dataset.k;if(sortF===k)sortA=!sortA;else{sortF=k;sortA=true;}renderTable();});
+  });
+}
+
+function renderTable(){
+  const rows=getVis(),tbody=document.getElementById('tbody');tbody.innerHTML='';
+  const ec=Object.keys(editMap).length;
+  document.getElementById('cntTxt').textContent=rows.length+' Obj.';
+  document.getElementById('editTxt').style.display=ec?'':'none';
+  document.getElementById('editTxt').textContent=ec+' geandert';
+  document.getElementById('btnReset').disabled=!ec;
+  document.getElementById('btnCSV').disabled=!BARS.length;
+  rows.forEach(bar=>{
+    const edits=editMap[bar.id]||{},isEd=!!Object.keys(edits).length,isSel=bar.id===selId;
+    const tr=document.createElement('tr');tr.className=(isSel?'sel':'')+(isEd?' edited':'');
+    const mergedProps=Object.assign({},bar.props,edits);
+    tr.innerHTML=COLS.map((col,i)=>{
+      const val=col.fn(Object.assign({},bar,{props:mergedProps}));
+      if(i===0)return '<td><span style="display:inline-block;width:7px;height:7px;border-radius:2px;background:'+gc(grp(bar))+';margin-right:5px;vertical-align:middle"></span><b>'+esc(val)+'</b></td>';
+      if(col.k==='s')return '<td style="color:var(--warn);font-size:9px">'+esc(val)+'</td>';
+      return '<td class="'+(edits[col.k]?'warn-text':'')+'" title="'+esc(val)+'">'+(esc(val)||'-')+'</td>';
+    }).join('');
+    tr.addEventListener('click',()=>selRow(bar.id));
+    tbody.appendChild(tr);
+  });
+}
+
+const EDIT_F=new Set(['Pos_Nr.','Position number','Materialguete','LAYER','Werkstoff','BarLength','Masse','LV_Position','Endausbildung','Connection','Shape code','zugehoerige_Plaene','Bauteil-ID']);
+function selRow(id){selId=id;renderTable();openDet(id);}
+function openDet(id){
+  const bar=BARS.find(b=>b.id===id);if(!bar)return;
+  document.getElementById('detPanel').classList.remove('hidden');
+  document.getElementById('detId').textContent=bar.id;
+  document.getElementById('detPos').textContent=grp(bar);
+  const edits=editMap[id]||{},body=document.getElementById('detBody');
+  body.innerHTML='<div class="d-row"><div class="d-key">GlobalId</div><div class="d-val" style="font-size:9px;color:var(--muted)">'+esc(bar.guid)+'</div></div><hr class="d-sep">';
+  Object.entries(Object.assign({},bar.props,edits)).forEach(([key,val])=>{
+    const ch=edits[key]!==undefined;
+    const isNew=!(key in bar.props)&&ch;
+    const isE=EDIT_F.has(key)||isNew;
+    const div=document.createElement('div');div.className='d-row';
+    if(isNew){
+      div.innerHTML='<div class="d-key" style="color:var(--ok)">'+esc(key)+'<span style="font-size:8px;margin-left:4px;opacity:.6">(neu)</span></div>'
+        +'<div style="display:flex;gap:4px;align-items:center">'
+        +'<input class="d-inp changed" data-key="'+esc(key)+'" data-id="'+esc(id)+'" value="'+esc(val||'')+'" style="flex:1">'
+        +'<button class="btn btn-d del-attr" data-delkey="'+esc(key)+'" style="padding:2px 7px;font-size:11px;flex-shrink:0" title="Attribut entfernen">✕</button>'
+        +'</div>';
+    } else if(isE){
+      div.innerHTML='<div class="d-key">'+esc(key)+'</div><input class="d-inp'+(ch?' changed':'')+'" data-key="'+esc(key)+'" data-id="'+esc(id)+'" value="'+esc(val||'')+'">';
+    } else {
+      div.innerHTML='<div class="d-key">'+esc(key)+'</div><div class="d-val">'+(esc(val)||'-')+'</div>';
+    }
+    body.appendChild(div);
+  });
+  // Neues-Attribut-Formular
+  const sep=document.createElement('hr');sep.className='d-sep';body.appendChild(sep);
+  const addRow=document.createElement('div');
+  addRow.innerHTML='<div class="d-key" style="margin-bottom:6px;color:var(--accent)">Neues Attribut</div>'
+    +'<input class="d-inp" id="newAttrKey" placeholder="Schlüssel…" style="margin-bottom:4px">'
+    +'<input class="d-inp" id="newAttrVal" placeholder="Wert…" style="margin-bottom:6px">'
+    +'<button class="btn btn-p" id="btnAddAttr" style="width:100%;padding:6px">+ Hinzufügen</button>';
+  body.appendChild(addRow);
+  // Eingaben für bestehende Felder
+  body.querySelectorAll('.d-inp[data-key]').forEach(inp=>{
+    inp.addEventListener('input',()=>{
+      const bid=inp.dataset.id,key=inp.dataset.key;
+      const b=BARS.find(x=>x.id===bid),orig=b.props[key];
+      if(!editMap[bid])editMap[bid]={};
+      if(orig!==undefined&&inp.value===orig){delete editMap[bid][key];if(!Object.keys(editMap[bid]).length)delete editMap[bid];inp.classList.remove('changed');}
+      else{editMap[bid][key]=inp.value;inp.classList.add('changed');}
+      renderTable();
+    });
+  });
+  // Löschen-Buttons für neue Attribute
+  body.querySelectorAll('.del-attr').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const key=btn.dataset.delkey;
+      if(editMap[id]){delete editMap[id][key];if(!Object.keys(editMap[id]).length)delete editMap[id];}
+      openDet(id);renderTable();toast('Attribut entfernt');
+    });
+  });
+  // Hinzufügen-Button
+  document.getElementById('btnAddAttr').addEventListener('click',()=>{
+    const k=document.getElementById('newAttrKey').value.trim();
+    const v=document.getElementById('newAttrVal').value.trim();
+    if(!k){toast('Schlüssel fehlt','warn');return;}
+    if(k in Object.assign({},bar.props,editMap[id]||{})){toast('Attribut existiert bereits','warn');return;}
+    if(!editMap[id])editMap[id]={};
+    editMap[id][k]=v;
+    openDet(id);renderTable();toast('Attribut hinzugefügt');
+  });
+}
+document.getElementById('btnSaveDet').addEventListener('click',()=>{toast('Ubernommen');renderTable();});
+document.getElementById('btnResetRow').addEventListener('click',()=>{if(selId){delete editMap[selId];openDet(selId);renderTable();toast('Reset');}});
+document.getElementById('btnCloseDet').addEventListener('click',()=>{selId=null;document.getElementById('detPanel').classList.add('hidden');renderTable();});
+
+function dlCSV(){
+  const rows=getVis(),allK=new Set(['id','pos','guid']);
+  rows.forEach(b=>Object.keys(Object.assign({},b.props,editMap[b.id]||{})).forEach(k=>allK.add(k)));
+  const keys=[...allK];
+  let csv=keys.map(k=>'"'+k+'"').join(';')+'\n';
+  rows.forEach(bar=>{
+    const props=Object.assign({},bar.props,editMap[bar.id]||{});
+    csv+=keys.map(k=>'"'+String(k==='id'?bar.id:k==='pos'?bar.pos:k==='guid'?bar.guid:(props[k]||'')).replace(/"/g,'""')+'"').join(';')+'\n';
+  });
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download=fname.replace('.ifc','')+'_Export.csv';a.click();toast('CSV exportiert');
+}
+
+// ── IFC-Export ─────────────────────────────────────────────────────────────
+function splitIfcArgs(s){
+  // Splits IFC argument list by comma, respecting parentheses and quoted strings
+  const parts=[];let d=0,cur='',q=false;
+  for(let i=0;i<s.length;i++){
+    const c=s[i];
+    if(c==="'"){q=!q;cur+=c;continue;}
+    if(!q&&c==='(')d++;
+    if(!q&&c===')')d--;
+    if(!q&&d===0&&c===','){parts.push(cur);cur='';continue;}
+    cur+=c;
+  }
+  if(cur!=='')parts.push(cur);
+  return parts;
+}
+function encodeIfcVal(v){
+  if(v===''||v===null||v===undefined)return '$';
+  const s=String(v).trim();
+  const n=parseFloat(s);
+  if(s!==''&&!isNaN(n)){
+    if(Number.isInteger(n)&&!s.includes('.'))return 'IFCINTEGER('+n+')';
+    return 'IFCREAL('+n+')';
+  }
+  return "IFCTEXT('"+ifcEscape(s)+"')";
+}
+function genIfcGuid(){
+  const c='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$';
+  let g='';for(let i=0;i<22;i++)g+=c[Math.floor(Math.random()*64)];
+  return g;
+}
+function dlIFC(){
+  if(!rawIFC||!BARS.length){toast('Keine Datei geladen','warn');return;}
+  if(!Object.keys(editMap).length){toast('Keine Änderungen vorhanden','warn');return;}
+  let out=rawIFC;
+  // Höchste Entity-ID ermitteln
+  let maxId=0;
+  for(const m of out.matchAll(/#(\d+)=/g))maxId=Math.max(maxId,parseInt(m[1]));
+  const appendLines=[];
+  for(const [barId,edits] of Object.entries(editMap)){
+    const bar=BARS.find(b=>b.id===barId);if(!bar||!Object.keys(edits).length)continue;
+    const newAttrs=[];
+    for(const [key,newVal] of Object.entries(edits)){
+      if(key in bar.props){
+        // Bestehendes Attribut in-place ersetzen
+        const pid=bar.propEids?.[key];
+        if(!pid)continue;
+        const enc=encodeIfcVal(newVal);
+        const esc=pid.replace('#','\\#');
+        const re=new RegExp('('+esc+'=IFCPROPERTYSINGLEVALUE\\()([^;]+)(\\);)');
+        out=out.replace(re,(match,pre,inner,post)=>{
+          const parts=splitIfcArgs(inner);
+          if(parts.length>=3){parts[2]=enc;return pre+parts.join(',')+post;}
+          return match;
+        });
+      } else {
+        // Neues Attribut → neue Entities
+        newAttrs.push([key,newVal]);
+      }
+    }
+    if(newAttrs.length){
+      const propIds=[];
+      for(const [key,val] of newAttrs){
+        maxId++;
+        appendLines.push('#'+maxId+"=IFCPROPERTYSINGLEVALUE('"+ifcEscape(key)+"',$,"+encodeIfcVal(val)+",$);");
+        propIds.push('#'+maxId);
+      }
+      maxId++;
+      const psetId='#'+maxId;
+      appendLines.push(psetId+"=IFCPROPERTYSET('"+genIfcGuid()+"',$,'JXP_CustomProperties',$,("+propIds.join(',')+"));");
+      maxId++;
+      appendLines.push('#'+maxId+"=IFCRELDEFINESBYPROPERTIES('"+genIfcGuid()+"',$,$,$,("+barId+"),"+psetId+");");
+    }
+  }
+  // Neue Zeilen vor ENDSEC einfügen
+  if(appendLines.length){
+    const idx=out.lastIndexOf('ENDSEC;');
+    if(idx>=0)out=out.slice(0,idx)+appendLines.join('\n')+'\n'+out.slice(idx);
+  }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([out],{type:'application/x-step'}));
+  a.download=fname.replace(/\.ifc$/i,'')+'_edited.ifc';
+  a.click();toast('IFC exportiert');
+}
+
+function abGrps(markedOnly){
+  const g={};
+  if(markedOnly&&marked.size){
+    for(const mesh of meshes){
+      if(!marked.has(mesh.userData.id))continue;
+      const k=mesh.userData.grp||grp(mesh.userData.bar);
+      if(!g[k])g[k]=[];g[k].push(mesh.userData.bar);
+    }
+  } else {
+    BARS.forEach(b=>{const k=grp(b);if(!g[k])g[k]=[];g[k].push(b);});
+  }
+  return g;
+}
+function getSoll(bars){let t=0;bars.forEach(b=>{const v=parseFloat(b.props['BarCount']||b.props['Stabanzahl_Verlegung']||1);t+=v;});return Math.round(t);}
+function getSollDm(bars){
+  for(const b of bars){
+    const sd=parseFloat(b.props['Stabdurchmesser']);if(!isNaN(sd)&&sd>0)return Math.round(sd);
+    const nd=parseFloat(b.props['NominalDiameter']);if(!isNaN(nd)&&nd>0)return Math.round(nd*1000);
+  }
+  return null;
+}
+
+function buildAbList(){
+  if(!BARS.length){document.getElementById('abProg').textContent='Keine Datei';document.getElementById('abList').innerHTML='<div style="padding:14px 12px;color:var(--muted);font-size:10px">IFC laden</div>';return;}
+  const useMarked=marked.size>0;
+  const gs=abGrps(useMarked);
+  const _fn=document.getElementById('abFilterNote');
+  if(_fn){
+    _fn.style.display=useMarked?'block':'none';
+    if(useMarked)_fn.textContent='⬚ Aus Markierung: '+marked.size+' Stäbe · '+Object.keys(gs).length+' Pos.';
+  }
+  const keys=Object.keys(gs).sort((a,b)=>{const an=parseInt(a),bn=parseInt(b);return isNaN(an)||isNaN(bn)?a.localeCompare(b):an-bn;});
+  let ok=0,abw=0,off=0;keys.forEach(k=>{const s=(protokoll[k]||{}).status||'offen';if(s==='ok')ok++;else if(s==='abweichung')abw++;else off++;});
+  document.getElementById('abProg').textContent='OK:'+ok+' ABW:'+abw+' OFF:'+off;
+  document.getElementById('abOkCnt').textContent='OK '+ok;
+  document.getElementById('abAbwCnt').textContent='ABW '+abw;
+  document.getElementById('abOffCnt').textContent='OFF '+off;
+  const list=document.getElementById('abList');list.innerHTML='';
+  keys.forEach(pos=>{
+    const bars=gs[pos],e=protokoll[pos]||{},st=e.status||'offen';
+    const col=st==='ok'?'#00cc66':st==='abweichung'?'#ffaa00':'#3a4560';
+    const icon=st==='ok'?'OK':st==='abweichung'?'ABW':'?';
+    const item=document.createElement('div');item.className='ab-item'+(abCurPos===pos?' active':'');
+    item.innerHTML='<span style="color:'+col+';font-size:11px;font-weight:700">'+icon+'</span><div style="flex:1"><div style="font-size:11px;color:#dce8ff;font-weight:600">Pos. '+esc(pos)+'</div><div style="font-size:10px;color:var(--muted)">Soll: '+getSoll(bars)+'</div></div>'+(e.ist!==undefined?'<span style="font-size:11px;color:'+col+';font-weight:700">'+e.ist+'</span>':'');
+    item.addEventListener('click',()=>openAbPos(pos,bars));
+    item.addEventListener('touchend',e2=>{e2.preventDefault();openAbPos(pos,bars);},{passive:false});
+    list.appendChild(item);
+  });
+  updateAbProtokoll();
+}
+
+function openAbPos(pos,bars){
+  abCurPos=pos;
+  document.getElementById('abEmpty').style.display='none';
+  document.getElementById('abForm').style.display='block';
+  document.getElementById('abTitle').textContent='Pos. '+pos;
+  document.getElementById('abSub').textContent=bars.length+' Mesh - '+new Date().toLocaleString('de-DE');
+  const soll=getSoll(bars);document.getElementById('abSoll').textContent=soll;
+  const saved=protokoll[pos]||{};
+  document.getElementById('abIst').value=saved.ist!==undefined?saved.ist:'';
+  document.getElementById('abKomm').value=saved.kommentar||'';
+  const fp=document.getElementById('abFotoImg'),fn=document.getElementById('abFotoName');
+  if(saved.fotoUrl){fp.src=saved.fotoUrl;fp.style.display='block';fn.textContent=saved.fotoName||'';}
+  else{fp.style.display='none';fn.textContent='';}
+  const attrK=['Stabdurchmesser','NominalDiameter','BarLength','Masse','Materialguete','LAYER','BarDistance','Shape code','Werkstoff','BarCount'];
+  const merged={};for(const bar of bars)for(const k of attrK)if(bar.props[k])merged[k]=bar.props[k];
+  let ah='';for(const [k,v] of Object.entries(merged))ah+='<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(fmtVal(k,v))+'</span></div>';
+  document.getElementById('abAttrs').innerHTML=ah||'<div style="color:var(--muted);font-size:10px">-</div>';
+  updateAbDelta();setAbBadge(saved.status||'offen');buildAbList();
+}
+
+function updateAbDelta(){
+  const soll=parseInt(document.getElementById('abSoll').textContent);
+  const ist=parseInt(document.getElementById('abIst').value);
+  const el=document.getElementById('abDelta');
+  if(isNaN(ist)){el.style.display='none';return;}
+  el.style.display='block';const diff=ist-soll;
+  if(diff===0){el.style.background='#0a2010';el.style.border='1px solid #00cc66';el.style.color='#00cc66';el.textContent='OK - Anzahl stimmt';}
+  else{el.style.background='#1a1000';el.style.border='1px solid #ffaa00';el.style.color='#ffaa00';el.textContent='Diff: '+(diff>0?'+':'')+diff+' Staebe';}
+}
+
+document.getElementById('abIst').addEventListener('input',()=>{
+  if(!abCurPos)return;if(!protokoll[abCurPos])protokoll[abCurPos]={};
+  const v=parseInt(document.getElementById('abIst').value);
+  protokoll[abCurPos].ist=isNaN(v)?undefined:v;
+  protokoll[abCurPos].zeit=new Date().toLocaleString('de-DE');
+  updateAbDelta();
+});
+document.getElementById('abKomm').addEventListener('input',()=>{
+  if(!abCurPos)return;if(!protokoll[abCurPos])protokoll[abCurPos]={};
+  protokoll[abCurPos].kommentar=document.getElementById('abKomm').value;
+});
+document.getElementById('abFotoBtn').addEventListener('click',()=>document.getElementById('abFoto').click());
+document.getElementById('abFoto').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file||!abCurPos)return;
+  document.getElementById('abFotoName').textContent=file.name;
+  const reader=new FileReader();
+  reader.onload=r=>{
+    if(!protokoll[abCurPos])protokoll[abCurPos]={};
+    protokoll[abCurPos].fotoUrl=r.target.result;protokoll[abCurPos].fotoName=file.name;
+    document.getElementById('abFotoImg').src=r.target.result;
+    document.getElementById('abFotoImg').style.display='block';
+  };
+  reader.readAsDataURL(file);
+});
+
+function setAbStatus(s){
+  if(!abCurPos)return;
+  if(!protokoll[abCurPos])protokoll[abCurPos]={};
+  const e=protokoll[abCurPos];
+  e.status=s;e.pos=abCurPos;e.soll=parseInt(document.getElementById('abSoll').textContent);e.zeit=new Date().toLocaleString('de-DE');
+  setAbBadge(s);buildAbList();updateAbProtokoll();
+  toast(s==='ok'?'Bestanden':s==='abweichung'?'Abweichung':'Offen');
+}
+function setAbBadge(s){
+  const b=document.getElementById('abBadge');
+  if(s==='ok'){b.style.borderColor='#00cc66';b.style.color='#00cc66';b.style.background='#0a2010';b.textContent='BESTANDEN';}
+  else if(s==='abweichung'){b.style.borderColor='#ffaa00';b.style.color='#ffaa00';b.style.background='#1a1000';b.textContent='ABWEICHUNG';}
+  else{b.style.borderColor='var(--border)';b.style.color='var(--muted)';b.style.background='transparent';b.textContent='OFFEN';}
+}
+document.getElementById('abOk').addEventListener('click',()=>setAbStatus('ok'));
+document.getElementById('abAbw').addEventListener('click',()=>setAbStatus('abweichung'));
+document.getElementById('abOff').addEventListener('click',()=>setAbStatus('offen'));
+['abOk','abAbw','abOff','abFotoBtn'].forEach(id=>{
+  const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
+});
+
+function updateAbProtokoll(){
+  const entries=Object.values(protokoll).filter(e=>e.status&&e.status!=='offen');
+  const p=document.getElementById('abProtokoll');
+  if(!entries.length){p.innerHTML='<div style="color:var(--muted);font-size:10px;padding:8px">Keine Eintraege</div>';return;}
+  p.innerHTML=entries.sort((a,b)=>(a.pos||'').localeCompare(b.pos||'')).map(e=>{
+    const col=e.status==='ok'?'#00cc66':'#ffaa00';
+    const dmOk=e.istDm!==undefined&&e.sollDm!==undefined&&e.istDm===e.sollDm;
+    const dmAbw=e.istDm!==undefined&&e.sollDm!==undefined&&e.istDm!==e.sollDm;
+    const dmLine=e.istDm!==undefined
+      ?'Ø Soll:'+( e.sollDm!==undefined?e.sollDm+'mm':'–')+' Ist:'+e.istDm+'mm'+(dmAbw?' ⚠':'')
+      :(e.sollDm!==undefined?'Ø Soll:'+e.sollDm+'mm':'');
+    return '<div style="padding:7px 5px;border-bottom:1px solid var(--border);font-size:10px">'
+      +'<div style="display:flex;justify-content:space-between"><span style="color:#dce8ff;font-weight:700">Pos. '+esc(e.pos)+'</span><span style="color:'+col+'">'+(e.status==='ok'?'OK':'ABW')+'</span></div>'
+      +'<div style="color:var(--muted)">Stk: Soll '+(e.soll||'-')+' · Ist '+(e.ist!==undefined?e.ist:'-')+'</div>'
+      +(dmLine?'<div style="color:'+(dmAbw?'#ff4466':dmOk?'#00cc66':'var(--muted)')+'">'+dmLine+'</div>':'')
+      +(e.kommentar?'<div style="color:var(--muted);font-style:italic">"'+esc(e.kommentar.slice(0,35))+(e.kommentar.length>35?'...':'')+'"</div>':'')
+      +'<div style="color:#2a3550">'+(e.zeit||'')+'</div></div>';
+  }).join('');
+}
+
+document.getElementById('abCSV').addEventListener('click',async()=>{
+  const gs=abGrps(marked.size>0);const keys=Object.keys(gs).sort();
+  const rows=[['Position','Soll Anzahl','Ist Anzahl','Diff Anzahl','Soll Ø mm','Ist Ø mm','Diff Ø mm','Status','Kommentar','Foto','Uhrzeit']];
+  keys.forEach(pos=>{
+    const e=protokoll[pos]||{};const soll=getSoll(gs[pos]);
+    const ist=e.ist!==undefined?e.ist:'';
+    const diff=ist!==''?ist-soll:'';
+    const sollDm=e.sollDm!==undefined?e.sollDm:'';
+    const istDm=e.istDm!==undefined?e.istDm:'';
+    const diffDm=istDm!==''&&sollDm!==''?istDm-sollDm:'';
+    const fotoRef=e.fotoUrl?'Fotos/Pos_'+pos+'.'+(e.fotoUrl.match(/image\/(\w+)/)?.[1]||'jpg').replace('jpeg','jpg'):'';
+    rows.push([pos,soll,ist,diff,sollDm,istDm,diffDm,e.status||'offen',e.kommentar||'',fotoRef,e.zeit||'']);
+  });
+  const csv='﻿'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+  const hasPhotos=keys.some(pos=>protokoll[pos]?.fotoUrl);
+  const datum=new Date().toISOString().slice(0,10);
+  if(hasPhotos&&window.JSZip){
+    const zip=new JSZip();
+    zip.file('Abnahme.csv',csv);
+    const fd=zip.folder('Fotos');
+    keys.forEach(pos=>{
+      const e=protokoll[pos]||{};if(!e.fotoUrl)return;
+      const m=e.fotoUrl.match(/^data:image\/(\w+);base64,(.+)$/);
+      if(m){const ext=m[1]==='jpeg'?'jpg':m[1];fd.file('Pos_'+pos+'.'+ext,m[2],{base64:true});}
+    });
+    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='Abnahme_'+datum+'.zip';a.click();toast('ZIP exportiert (CSV + Fotos)');
+  } else {
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+    a.download='Abnahme_'+datum+'.csv';a.click();toast('CSV exportiert');
+  }
+});
+
+document.getElementById('abPDF').addEventListener('click',()=>{
+  const gs=abGrps(marked.size>0);const datum=new Date().toLocaleString('de-DE');
+  let rows='';
+  Object.keys(gs).sort().forEach(pos=>{
+    const e=protokoll[pos]||{};const soll=getSoll(gs[pos]);
+    const ist=e.ist!==undefined?e.ist:'-';
+    const diff=e.ist!==undefined?e.ist-soll:'-';
+    const col=e.status==='ok'?'#006622':e.status==='abweichung'?'#995500':'#888';
+    const istDm=e.istDm!==undefined?e.istDm:'-';
+    const sollDm=e.sollDm!==undefined?e.sollDm:'-';
+    const diffDm=e.istDm!==undefined&&e.sollDm!==undefined?e.istDm-e.sollDm:'-';
+    const dmCol=diffDm!=='-'&&diffDm!==0?'#cc3300':'inherit';
+    rows+='<tr><td><b>Pos. '+esc(pos)+'</b></td>'
+      +'<td style="text-align:center">'+soll+'</td>'
+      +'<td style="text-align:center">'+ist+'</td>'
+      +'<td style="text-align:center;color:'+(diff!=='-'&&diff!==0?'#cc3300':'inherit')+'">'+(diff!=='-'?(diff>0?'+':'')+diff:'-')+'</td>'
+      +'<td style="text-align:center">'+sollDm+'</td>'
+      +'<td style="text-align:center">'+istDm+'</td>'
+      +'<td style="text-align:center;color:'+dmCol+'">'+(diffDm!=='-'?(diffDm>0?'+':'')+diffDm:'-')+'</td>'
+      +'<td style="color:'+col+';font-weight:bold">'+(e.status||'offen')+'</td>'
+      +'<td>'+esc(e.kommentar||'')+'</td>'
+      +'<td style="font-size:10px;color:#666">'+esc(e.zeit||'')+'</td></tr>';
+  });
+  // Fotoanlage aufbauen
+  let fotoCards='';
+  Object.keys(gs).sort().forEach(pos=>{
+    const e=protokoll[pos]||{};if(!e.fotoUrl)return;
+    const col=e.status==='ok'?'#006622':e.status==='abweichung'?'#cc4400':'#888';
+    const label=e.status==='ok'?'✓ BESTANDEN':e.status==='abweichung'?'⚠ ABWEICHUNG':'–';
+    fotoCards+='<div style="break-inside:avoid;border:1px solid #ccc;border-radius:5px;padding:10px;background:#fafafa">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
+      +'<b style="font-size:13px">Pos. '+esc(pos)+'</b>'
+      +'<span style="color:'+col+';font-weight:bold;font-size:11px">'+label+'</span></div>'
+      +'<img src="'+esc(e.fotoUrl)+'" style="width:100%;max-height:220px;object-fit:contain;display:block;border:1px solid #ddd;border-radius:3px">'
+      +(e.kommentar?'<div style="margin-top:6px;font-size:11px;color:#555;font-style:italic">"'+esc(e.kommentar)+'"</div>':'')
+      +'<div style="margin-top:4px;font-size:10px;color:#aaa">'+( e.zeit||'')+'</div></div>';
+  });
+  const fotoSection=fotoCards
+    ?'<div style="margin-top:28px;page-break-before:auto">'
+      +'<h2 style="font-size:13px;font-family:Arial,sans-serif;border-bottom:2px solid #333;padding-bottom:5px;margin-bottom:14px">Fotoanlage ('+Object.values(protokoll).filter(e=>e.fotoUrl).length+' Fotos)</h2>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">'+fotoCards+'</div></div>'
+    :'';
+  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bewehrungsabnahme</title>'
+    +'<style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px}h1{font-size:17px;margin-bottom:4px}'
+    +'.sub{color:#666;font-size:10px;margin-bottom:18px}table{width:100%;border-collapse:collapse}'
+    +'th{background:#222;color:#fff;padding:7px 9px;text-align:left;font-size:11px}'
+    +'td{padding:6px 9px;border-bottom:1px solid #ddd;vertical-align:top}tr:nth-child(even){background:#f7f7f7}'
+    +'@media print{.no-print{display:none}}</style></head>'
+    +'<body><h1>Bewehrungsabnahme-Protokoll</h1>'
+    +'<div class="sub">Erstellt: '+esc(datum)+' · '+esc(fname)+'</div>'
+    +'<table><thead><tr><th>Position</th><th>Soll Stk</th><th>Ist Stk</th><th>Diff</th>'
+    +'<th>Soll Ø</th><th>Ist Ø</th><th>Diff Ø</th><th>Status</th><th>Kommentar</th><th>Uhrzeit</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>'
+    +fotoSection
+    +'</body></html>';
+  const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);
+});
+
+// ── Stichproben-Abnahme ─────────────────────────────────────────────────────
+function openStichprobe(){
+  if(!marked.size){toast('Keine Stäbe markiert','warn');return;}
+  const groups={};
+  for(const mesh of meshes){
+    if(!marked.has(mesh.userData.id))continue;
+    const pos=mesh.userData.grp||'?';
+    if(!groups[pos])groups[pos]=[];
+    groups[pos].push(mesh.userData.bar);
+  }
+  const keys=Object.keys(groups).sort((a,b)=>{const an=parseInt(a),bn=parseInt(b);return isNaN(an)||isNaN(bn)?a.localeCompare(b):an-bn;});
+  document.getElementById('stichSub').textContent=keys.length+' Pos. · '+marked.size+' Stäbe · '+new Date().toLocaleString('de-DE');
+  const body=document.getElementById('stichBody');body.innerHTML='';
+  const INP='width:100%;background:#0a1320;border:1px solid var(--border);border-radius:4px;'
+    +'padding:7px 8px;font-family:inherit;font-size:22.5px;font-weight:700;text-align:center;outline:none;-webkit-appearance:none';
+  for(const pos of keys){
+    const soll=getSoll(groups[pos]),sollDm=getSollDm(groups[pos]),saved=protokoll[pos]||{};
+    const dmLabel=sollDm!==null?'Soll: '+soll+' Stäbe · Ø '+sollDm+' mm':'Soll: '+soll+' Stäbe · Ø –';
+    const row=document.createElement('div');
+    row.style.cssText='background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:10px 12px';
+    row.innerHTML=
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px">'
+      +'<span style="font-size:18px;font-weight:700;color:#dce8ff">Pos. '+esc(pos)+'</span>'
+      +'<span style="font-size:15px;color:var(--muted)">'+dmLabel+'</span></div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">'
+      // --- Anzahl ---
+      +'<div><div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Anzahl</div>'
+      +'<div style="display:flex;align-items:center;gap:5px">'
+      +'<input type="number" min="0" class="stich-ist" data-pos="'+esc(pos)+'" data-soll="'+soll+'"'
+      +' value="'+(saved.ist!==undefined?saved.ist:'')+'" placeholder="–"'
+      +' style="'+INP+';color:var(--accent);flex:1">'
+      +'<span id="stich-d-'+esc(pos)+'" style="font-size:19.5px;font-weight:700;min-width:40px;text-align:right"></span></div></div>'
+      // --- Durchmesser ---
+      +'<div><div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Ø mm</div>'
+      +'<div style="display:flex;align-items:center;gap:5px">'
+      +'<input type="number" min="0" step="1" class="stich-dm" data-pos="'+esc(pos)+'" data-solldm="'+(sollDm!==null?sollDm:'')+'"'
+      +' value="'+(saved.istDm!==undefined?saved.istDm:'')+'" placeholder="'+(sollDm!==null?sollDm:'–')+'"'
+      +' style="'+INP+';color:#e0aaff;flex:1">'
+      +'<span id="stich-dm-'+esc(pos)+'" style="font-size:19.5px;font-weight:700;min-width:40px;text-align:right"></span></div></div>'
+      +'</div>';
+    body.appendChild(row);
+  }
+  function mkUpd(inp,elId,parse,sollVal){
+    return function upd(){
+      const el=document.getElementById(elId);
+      const v=parse(inp.value),s=parse(sollVal);
+      if(isNaN(v)||sollVal===''){el.textContent='';return;}
+      const d=v-s;
+      el.textContent=d===0?'✓':(d>0?'+':'')+d+(parse===parseFloat?' mm':'');
+      el.style.color=d===0?'#00cc66':'#ff4466';
+    };
+  }
+  body.querySelectorAll('.stich-ist').forEach(inp=>{
+    const upd=mkUpd(inp,'stich-d-'+inp.dataset.pos,parseInt,inp.dataset.soll);
+    inp.addEventListener('input',upd);upd();
+  });
+  body.querySelectorAll('.stich-dm').forEach(inp=>{
+    const upd=mkUpd(inp,'stich-dm-'+inp.dataset.pos,parseFloat,inp.dataset.solldm);
+    inp.addEventListener('input',upd);upd();
+  });
+  document.getElementById('stichKomm').value='';
+  document.getElementById('stichFotoName').textContent='';
+  document.getElementById('stichFotoImg').style.display='none';
+  document.getElementById('stichModal').style.display='block';
+}
+function saveStichprobe(status){
+  const body=document.getElementById('stichBody');
+  const komm=document.getElementById('stichKomm').value;
+  const zeit=new Date().toLocaleString('de-DE');
+  const fi=document.getElementById('stichFotoImg'),fn=document.getElementById('stichFotoName').textContent;
+  // Anzahl-Inputs als Map sammeln
+  const istMap={};
+  body.querySelectorAll('.stich-ist').forEach(inp=>{
+    istMap[inp.dataset.pos]={soll:parseInt(inp.dataset.soll),ist:inp.value!==''?parseInt(inp.value):undefined};
+  });
+  body.querySelectorAll('.stich-dm').forEach(inp=>{
+    const pos=inp.dataset.pos;
+    if(!istMap[pos])return;
+    istMap[pos].sollDm=inp.dataset.solldm!==''?parseFloat(inp.dataset.solldm):undefined;
+    istMap[pos].istDm=inp.value!==''?parseFloat(inp.value):undefined;
+  });
+  Object.entries(istMap).forEach(([pos,d])=>{
+    if(!protokoll[pos])protokoll[pos]={};
+    Object.assign(protokoll[pos],{pos,soll:d.soll,ist:d.ist,sollDm:d.sollDm,istDm:d.istDm,status,kommentar:komm,zeit});
+    if(fi.style.display!=='none'&&fi.src)Object.assign(protokoll[pos],{fotoUrl:fi.src,fotoName:fn});
+  });
+  document.getElementById('stichModal').style.display='none';
+  buildAbList();
+  toast(Object.keys(istMap).length+' Pos. → '+(status==='ok'?'Bestanden':'Abweichung'));
+}
+document.getElementById('stichClose').addEventListener('click',()=>document.getElementById('stichModal').style.display='none');
+document.getElementById('mpStich').addEventListener('click',openStichprobe);
+document.getElementById('stichOk').addEventListener('click',()=>saveStichprobe('ok'));
+document.getElementById('stichAbw').addEventListener('click',()=>saveStichprobe('abweichung'));
+document.getElementById('stichFotoBtn').addEventListener('click',()=>document.getElementById('stichFoto').click());
+document.getElementById('stichFoto').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  document.getElementById('stichFotoName').textContent=file.name;
+  const r=new FileReader();
+  r.onload=ev=>{document.getElementById('stichFotoImg').src=ev.target.result;document.getElementById('stichFotoImg').style.display='block';};
+  r.readAsDataURL(file);
+});
+['mpStich','stichClose','stichOk','stichAbw','stichFotoBtn'].forEach(id=>{
+  const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
+});
+
+// ── Rechteck-Selektion ──────────────────────────────────────────────────────
+{
+  const vc=document.getElementById('vc');
+  // Overlay-Rechteck
+  const selEl=document.createElement('div');
+  selEl.style.cssText='position:absolute;border:1.5px solid var(--accent);background:rgba(0,200,255,0.07);'
+    +'pointer-events:none;display:none;box-sizing:border-box;z-index:2;';
+  document.querySelector('.v-ca').appendChild(selEl);
+
+  let bsA=null,bsOn=false;
+
+  function cxy(cx,cy){const r=vc.getBoundingClientRect();return{x:cx-r.left,y:cy-r.top};}
+  function showSel(a,b){
+    const x=Math.min(a.x,b.x),y=Math.min(a.y,b.y);
+    Object.assign(selEl.style,{display:'block',left:x+'px',top:y+'px',
+      width:Math.abs(b.x-a.x)+'px',height:Math.abs(b.y-a.y)+'px'});
+  }
+  function hideSel(){selEl.style.display='none';}
+
+  function applyBoxSel(a,b){
+    if(!meshes.length)return;
+    const W=vc.clientWidth,H=vc.clientHeight;
+    const x0=Math.min(a.x,b.x),x1=Math.max(a.x,b.x);
+    const y0=Math.min(a.y,b.y),y1=Math.max(a.y,b.y);
+    if(x1-x0<4||y1-y0<4)return; // zu klein → kein Zufall-Select
+    const bb=new THREE.Box3(),v=new THREE.Vector3();
+    let cnt=0;
+    for(const mesh of meshes){
+      if(!mesh.visible)continue;
+      bb.setFromObject(mesh);
+      if(bb.isEmpty())continue;
+      const{min:mn,max:mx}=bb;
+      // 8 Ecken des AABB auf Bildschirm projizieren
+      let px0=Infinity,px1=-Infinity,py0=Infinity,py1=-Infinity,vis=false;
+      for(let i=0;i<8;i++){
+        v.set(i&1?mx.x:mn.x,i&2?mx.y:mn.y,i&4?mx.z:mn.z).project(camera);
+        if(v.z>1)continue; // hinter Kamera
+        const sx=(v.x+1)/2*W,sy=(1-v.y)/2*H;
+        if(sx<px0)px0=sx;if(sx>px1)px1=sx;
+        if(sy<py0)py0=sy;if(sy>py1)py1=sy;
+        vis=true;
+      }
+      if(!vis||px1<x0||px0>x1||py1<y0||py0>y1)continue;
+      const id=mesh.userData.id;
+      if(!marked.has(id)){
+        marked.add(id);mesh.userData.marked=true;
+        mesh.material.color.copy(MARK_COL);
+        mesh.material.emissive.set(0xff2200);mesh.material.emissiveIntensity=.4;
+        cnt++;
+      }
+    }
+    updateMP();
+    if(cnt)toast(marked.size+' Stäbe markiert');
+  }
+
+  // Maus
+  vc.addEventListener('mousedown',e=>{
+    if(!boxMode)return;
+    e.preventDefault();bsA=cxy(e.clientX,e.clientY);bsOn=true;showSel(bsA,bsA);
+  });
+  window.addEventListener('mousemove',e=>{
+    if(!boxMode||!bsOn)return;
+    showSel(bsA,cxy(e.clientX,e.clientY));
+  });
+  window.addEventListener('mouseup',e=>{
+    if(!boxMode||!bsOn)return;
+    bsOn=false;const end=cxy(e.clientX,e.clientY);hideSel();applyBoxSel(bsA,end);
+  });
+
+  // Touch
+  vc.addEventListener('touchstart',e=>{
+    if(!boxMode||e.touches.length!==1)return;
+    e.preventDefault();bsA=cxy(e.touches[0].clientX,e.touches[0].clientY);bsOn=true;showSel(bsA,bsA);
+  },{passive:false});
+  vc.addEventListener('touchmove',e=>{
+    if(!boxMode||!bsOn||e.touches.length!==1)return;
+    e.preventDefault();showSel(bsA,cxy(e.touches[0].clientX,e.touches[0].clientY));
+  },{passive:false});
+  vc.addEventListener('touchend',e=>{
+    if(!boxMode||!bsOn)return;
+    bsOn=false;const t=e.changedTouches[0];hideSel();applyBoxSel(bsA,cxy(t.clientX,t.clientY));
+  },{passive:true});
+
+  // Toggle-Button
+  document.getElementById('hbBox').addEventListener('click',()=>{
+    boxMode=!boxMode;
+    const btn=document.getElementById('hbBox');
+    btn.classList.toggle('ghost-on',boxMode);
+    btn.style.opacity=boxMode?'1':'.4';
+    vc.style.cursor=boxMode?'crosshair':'default';
+  });
+  // hbBox per touchend (wie die anderen HUD-Buttons)
+  document.getElementById('hbBox').addEventListener('touchend',e=>{e.preventDefault();document.getElementById('hbBox').click();},{passive:false});
+}
+
+// ── Measurement tool ─────────────────────────────────────────────────────────
+let measurePts=[];      // [{pt:Vector3, sphere:Mesh}]
+let measureObjects=[];  // [{spheres:[s1,s2], line:Line, label:div, mid:Vector3}]
+let currentSnapPoint=null;
+let snapIndicatorRing=null;
+const barSnapCache=new Map();
+let measureDisplayScale=1; // corrects for IFC unit mismatch
+
+// Die Längeneinheit wird in parseIFC korrekt aus IFCUNITASSIGNMENT bestimmt,
+// d.h. die Szene liegt immer in echten Metern vor – daher Anzeige-Faktor 1.
+// (Frühere bbox-Heuristik entfernt: sie hat große Modelle wie eine 667-m-Brücke
+// fälschlich als mm interpretiert und Messwerte um Faktor 1000 verfälscht.)
+function calibrateMeasureScale(){
+  measureDisplayScale=1;
+}
+
+function getMR(){
+  if(!meshes.length)return 0.05;
+  const bb=new THREE.Box3();meshes.forEach(m=>bb.expandByObject(m));
+  const s=bb.getSize(new THREE.Vector3());
+  return Math.max(s.x,s.y,s.z)*0.008;
+}
+
+// Compute bar axis endpoints via "farthest-pair" + projection method
+function computeBarSnapPoints(mesh){
+  const pos=mesh.geometry.getAttribute('position');
+  const n=pos.count;if(n<6)return null;
+  let cx=0,cy=0,cz=0;
+  for(let i=0;i<n;i++){cx+=pos.getX(i);cy+=pos.getY(i);cz+=pos.getZ(i);}
+  cx/=n;cy/=n;cz/=n;
+  // vertex farthest from centroid → near one end cap
+  let mxD=0,fi=0;
+  for(let i=0;i<n;i++){const dx=pos.getX(i)-cx,dy=pos.getY(i)-cy,dz=pos.getZ(i)-cz;const d=dx*dx+dy*dy+dz*dz;if(d>mxD){mxD=d;fi=i;}}
+  const fax=pos.getX(fi),fay=pos.getY(fi),faz=pos.getZ(fi);
+  // vertex farthest from that one → near other end cap
+  let mxD2=0,fj=0;
+  for(let i=0;i<n;i++){const dx=pos.getX(i)-fax,dy=pos.getY(i)-fay,dz=pos.getZ(i)-faz;const d=dx*dx+dy*dy+dz*dz;if(d>mxD2){mxD2=d;fj=i;}}
+  const fbx=pos.getX(fj),fby=pos.getY(fj),fbz=pos.getZ(fj);
+  const axLen=Math.sqrt((fbx-fax)**2+(fby-fay)**2+(fbz-faz)**2);if(axLen<1e-9)return null;
+  const ax=(fbx-fax)/axLen,ay=(fby-fay)/axLen,az=(fbz-faz)/axLen;
+  // project all verts onto axis → true axis extent (finds circle centers, not rim)
+  let minT=1e9,maxT=-1e9;
+  for(let i=0;i<n;i++){
+    const t=(pos.getX(i)-cx)*ax+(pos.getY(i)-cy)*ay+(pos.getZ(i)-cz)*az;
+    if(t<minT)minT=t;if(t>maxT)maxT=t;
+  }
+  const P1=new THREE.Vector3(cx+minT*ax,cy+minT*ay,cz+minT*az);
+  const P2=new THREE.Vector3(cx+maxT*ax,cy+maxT*ay,cz+maxT*az);
+  // apply mesh world transform (usually identity, but be safe)
+  mesh.localToWorld(P1);mesh.localToWorld(P2);
+  const Mid=new THREE.Vector3().addVectors(P1,P2).multiplyScalar(.5);
+  return{P1,P2,Mid};
+}
+
+function getOrComputeSnap(mesh){
+  const id=mesh.userData.id;
+  if(barSnapCache.has(id))return barSnapCache.get(id);
+  const r=computeBarSnapPoints(mesh);
+  if(r)barSnapCache.set(id,r);
+  return r;
+}
+
+// Returns {pt:Vector3, type:'endpoint'|'midpoint'|'surface'}
+// Snaps within 28 px screen distance; priority: endpoint > midpoint > surface
+function getSnapPoint(hitMesh,hitPt,cx,cy){
+  const snap=getOrComputeSnap(hitMesh);
+  if(!snap)return{pt:hitPt,type:'surface'};
+  const canvas=document.getElementById('vc');
+  const rect=canvas.getBoundingClientRect();
+  const W=canvas.clientWidth,H=canvas.clientHeight;
+  const mx=cx-rect.left,my=cy-rect.top;
+  const v=new THREE.Vector3();
+  const cands=[
+    {pt:snap.P1,type:'endpoint'},
+    {pt:snap.P2,type:'endpoint'},
+    {pt:snap.Mid,type:'midpoint'},
+  ];
+  let bestD=28,best={pt:hitPt,type:'surface'};
+  for(const c of cands){
+    v.copy(c.pt).project(camera);
+    if(v.z>1)continue;
+    const sx=(v.x+1)/2*W,sy=(1-v.y)/2*H;
+    const d=Math.hypot(sx-mx,sy-my);
+    if(d<bestD){bestD=d;best=c;}
+  }
+  return best;
+}
+
+// Lazy-init the snap ring (created once, reused)
+function ensureSnapRing(){
+  if(snapIndicatorRing)return;
+  const geo=new THREE.RingGeometry(.7,1,28);
+  const mat=new THREE.MeshBasicMaterial({color:0x00ff88,side:THREE.DoubleSide,depthTest:false,transparent:true,opacity:.92});
+  snapIndicatorRing=new THREE.Mesh(geo,mat);snapIndicatorRing.renderOrder=999;snapIndicatorRing.visible=false;
+  scene.add(snapIndicatorRing);
+}
+
+function showSnapIndicator(pt,type){
+  ensureSnapRing();
+  snapIndicatorRing.material.color.setHex(type==='endpoint'?0x00ff88:type==='midpoint'?0x00ddff:0xffffff);
+  snapIndicatorRing.position.copy(pt);
+  // scale so ring appears ~11 px on screen regardless of zoom
+  const dist=camera.position.distanceTo(pt);
+  const ws=11*dist*Math.tan(camera.fov*Math.PI/360)/(document.getElementById('vc').clientHeight/2);
+  snapIndicatorRing.scale.setScalar(ws);
+  snapIndicatorRing.quaternion.copy(camera.quaternion);
+  snapIndicatorRing.visible=true;
+}
+
+function hideSnapIndicator(){
+  if(snapIndicatorRing)snapIndicatorRing.visible=false;
+  currentSnapPoint=null;
+}
+
+// Weltgröße für eine gewünschte Bildschirmgröße (px) an einem Punkt – damit
+// Mess-Kugeln unabhängig von Zoom und Modellgröße konstant klein bleiben.
+function measWorldSize(pt,px){
+  const H=document.getElementById('vc').clientHeight||1;
+  const dist=camera.position.distanceTo(pt);
+  return px*dist*Math.tan(camera.fov*Math.PI/360)/(H/2);
+}
+function addMeasureSphere(pt,color){
+  const geo=new THREE.SphereGeometry(1,12,8);
+  const mat=new THREE.MeshBasicMaterial({color,depthTest:false,transparent:true,opacity:.92});
+  const s=new THREE.Mesh(geo,mat);s.position.copy(pt);s.renderOrder=999;
+  s.scale.setScalar(measWorldSize(pt,6));
+  scene.add(s);return s;
+}
+
+function addMeasureLine(p1,p2){
+  const geo=new THREE.BufferGeometry().setFromPoints([p1.clone(),p2.clone()]);
+  const mat=new THREE.LineBasicMaterial({color:0xffee00,depthTest:false,transparent:true,opacity:.85});
+  const line=new THREE.Line(geo,mat);line.renderOrder=998;
+  scene.add(line);return line;
+}
+
+function fmtDist(d){
+  const m=d*measureDisplayScale;      // convert Three.js units → metres
+  const mm=Math.round(m*1000);
+  return mm>=1000?(mm/1000).toFixed(3)+' m':mm+' mm';
+}
+
+function createMeasureLabel(dist){
+  const el=document.createElement('div');
+  el.style.cssText='position:absolute;pointer-events:none;background:rgba(14,18,28,.9);border:1px solid #ffee00;color:#ffee00;font-size:16.5px;font-weight:700;padding:3px 9px;border-radius:3px;white-space:nowrap;z-index:50;transform:translate(-50%,-50%)';
+  el.textContent=fmtDist(dist);
+  document.getElementById('vc').parentElement.appendChild(el);
+  return el;
+}
+
+// Live measurement state (first-point placed, cursor moving)
+let measureLiveLine=null;
+let measureLiveLabel=null;
+let measureLiveMid=null;
+
+function updateLiveMeasure(p2){
+  if(!measurePts.length||!scene)return;
+  const p1=measurePts[0].pt;
+  // Rubber-band line
+  if(!measureLiveLine){
+    const buf=new Float32Array(6);
+    const geo=new THREE.BufferGeometry();
+    geo.setAttribute('position',new THREE.BufferAttribute(buf,3));
+    const mat=new THREE.LineBasicMaterial({color:0xffee00,depthTest:false,transparent:true,opacity:.45});
+    measureLiveLine=new THREE.Line(geo,mat);measureLiveLine.renderOrder=997;
+    scene.add(measureLiveLine);
+  }
+  const lp=measureLiveLine.geometry.attributes.position;
+  lp.setXYZ(0,p1.x,p1.y,p1.z);lp.setXYZ(1,p2.x,p2.y,p2.z);lp.needsUpdate=true;
+  // Live distance label (dashed border = temporary)
+  if(!measureLiveLabel){
+    measureLiveLabel=document.createElement('div');
+    measureLiveLabel.style.cssText='position:absolute;pointer-events:none;background:rgba(14,18,28,.82);border:1px dashed #ffee00;color:#ffee00;font-size:16.5px;font-weight:700;padding:3px 9px;border-radius:3px;white-space:nowrap;z-index:51;transform:translate(-50%,-50%)';
+    document.getElementById('vc').parentElement.appendChild(measureLiveLabel);
+  }
+  measureLiveLabel.textContent=fmtDist(p1.distanceTo(p2));
+  measureLiveLabel.style.display='block';
+  measureLiveMid=new THREE.Vector3().addVectors(p1,p2).multiplyScalar(.5);
+}
+
+function clearLiveMeasure(){
+  if(measureLiveLine){scene.remove(measureLiveLine);measureLiveLine.geometry.dispose();measureLiveLine.material.dispose();measureLiveLine=null;}
+  if(measureLiveLabel)measureLiveLabel.style.display='none';
+  measureLiveMid=null;
+}
+
+function updateMeasureLabels(){
+  if(!camera)return;
+  const canvas=document.getElementById('vc');
+  const W=canvas.clientWidth,H=canvas.clientHeight;
+  const v=new THREE.Vector3();
+  // Keep snap ring always facing camera + constant screen size (~11 px)
+  if(snapIndicatorRing&&snapIndicatorRing.visible){
+    snapIndicatorRing.quaternion.copy(camera.quaternion);
+    const dist=camera.position.distanceTo(snapIndicatorRing.position);
+    const ws=11*dist*Math.tan(camera.fov*Math.PI/360)/(H/2);
+    snapIndicatorRing.scale.setScalar(ws);
+  }
+  // Mess-Kugeln konstant ~6px gross halten (Zoom-/Modellgrößen-unabhängig)
+  for(const mo of measureObjects)for(const s of mo.spheres){if(s)s.scale.setScalar(measWorldSize(s.position,6));}
+  for(const p of measurePts){if(p.sphere)p.sphere.scale.setScalar(measWorldSize(p.sphere.position,6));}
+  // Live measurement label (follows midpoint of rubber-band line)
+  if(measureLiveLabel&&measureLiveMid&&measureLiveLabel.style.display!=='none'){
+    v.copy(measureLiveMid).project(camera);
+    if(v.z<1){
+      measureLiveLabel.style.left=((v.x+1)/2*W)+'px';
+      measureLiveLabel.style.top=((1-v.y)/2*H)+'px';
+    }
+  }
+  // Fixed completed measurement labels
+  for(const mo of measureObjects){
+    if(!mo.label||!mo.mid)continue;
+    v.copy(mo.mid).project(camera);
+    const x=(v.x+1)/2*W,y=(1-v.y)/2*H;
+    mo.label.style.left=x+'px';mo.label.style.top=y+'px';
+    mo.label.style.display=(v.z<1)?'block':'none';
+  }
+}
+
+function doMeasure(hit){
+  // Use snapped point if available, otherwise raw intersection
+  const pt=(currentSnapPoint||hit.point).clone();
+  if(measurePts.length===0){
+    const s=addMeasureSphere(pt,0x00ff88);
+    measurePts=[{pt,sphere:s}];
+    toast('Zweiten Punkt wählen …');
+  } else {
+    clearLiveMeasure();
+    const p1=measurePts[0].pt;
+    const s1=measurePts[0].sphere;
+    const s2=addMeasureSphere(pt,0x55aaff);
+    const line=addMeasureLine(p1,pt);
+    const dist=p1.distanceTo(pt);
+    const mid=new THREE.Vector3().addVectors(p1,pt).multiplyScalar(.5);
+    const label=createMeasureLabel(dist);
+    measureObjects.push({spheres:[s1,s2],line,label,mid});
+    measurePts=[];
+    document.getElementById('hbMeasureClear').style.display='flex';
+    toast('📏 '+fmtDist(dist));
+  }
+}
+
+function clearMeasures(){
+  clearLiveMeasure();
+  for(const mo of measureObjects){
+    for(const s of mo.spheres){if(s){scene.remove(s);s.geometry.dispose();s.material.dispose();}}
+    if(mo.line){scene.remove(mo.line);mo.line.geometry.dispose();mo.line.material.dispose();}
+    if(mo.label&&mo.label.parentElement)mo.label.parentElement.removeChild(mo.label);
+  }
+  measureObjects=[];
+  for(const p of measurePts){if(p.sphere){scene.remove(p.sphere);p.sphere.geometry.dispose();p.sphere.material.dispose();}}
+  measurePts=[];
+  hideSnapIndicator();
+  document.getElementById('hbMeasureClear').style.display='none';
+}
+
+{
+  const vc=document.getElementById('vc');
+  const hbM=document.getElementById('hbMeasure');
+  const hbMC=document.getElementById('hbMeasureClear');
+
+  // ── Hover: raycast + snap detection ──────────────────────────────────────
+  function doSnapHover(clientX,clientY){
+    if(!measureMode||!camera||!meshes.length)return;
+    const rect=vc.getBoundingClientRect();
+    const mx=((clientX-rect.left)/rect.width)*2-1;
+    const my=-((clientY-rect.top)/rect.height)*2+1;
+    rc.setFromCamera(new THREE.Vector2(mx,my),camera);
+    const hits=rc.intersectObjects(meshes.filter(m=>m.visible&&m.material.opacity>0.1));
+    if(!hits.length){hideSnapIndicator();if(measurePts.length)clearLiveMeasure();return;}
+    const snap=getSnapPoint(hits[0].object,hits[0].point,clientX,clientY);
+    currentSnapPoint=snap.pt;
+    showSnapIndicator(snap.pt,snap.type);
+    // If first point already placed → show live rubber-band distance
+    if(measurePts.length===1)updateLiveMeasure(snap.pt);
+  }
+
+  vc.addEventListener('mousemove',e=>{doSnapHover(e.clientX,e.clientY);});
+
+  // Touch drag to aim at snap point (finger slides to position before lifting)
+  vc.addEventListener('touchmove',e=>{
+    if(!measureMode||e.touches.length!==1)return;
+    e.preventDefault();
+    const t=e.touches[0];doSnapHover(t.clientX,t.clientY);
+  },{passive:false});
+
+  // Touch tap → confirm and place point
+  vc.addEventListener('touchend',e=>{
+    if(!measureMode||e.changedTouches.length!==1)return;
+    const t=e.changedTouches[0];
+    doRaycast(t.clientX,t.clientY);
+  },{passive:true});
+
+  // ── Toggle button ─────────────────────────────────────────────────────────
+  hbM.addEventListener('click',()=>{
+    measureMode=!measureMode;
+    if(measureMode&&boxMode){
+      boxMode=false;
+      const hbBox=document.getElementById('hbBox');
+      hbBox.style.opacity='.4';hbBox.classList.remove('ghost-on');
+    }
+    hbM.style.opacity=measureMode?'1':'.4';
+    hbM.classList.toggle('ghost-on',measureMode);
+    vc.style.cursor=measureMode?'crosshair':'default';
+    if(!measureMode){
+      hideSnapIndicator();
+      clearLiveMeasure();
+      if(measurePts.length){
+        for(const p of measurePts){scene.remove(p.sphere);p.sphere.geometry.dispose();p.sphere.material.dispose();}
+        measurePts=[];
+      }
+    }
+  });
+  hbM.addEventListener('touchend',e=>{e.preventDefault();hbM.click();},{passive:false});
+
+  hbMC.addEventListener('click',()=>clearMeasures());
+  hbMC.addEventListener('touchend',e=>{e.preventDefault();clearMeasures();},{passive:false});
+}
+
+// ── Draggable panels ────────────────────────────────────────────────────────
+function makeDraggable(el,handle){
+  let sx,sy,sl,st,drag=false;
+  handle.style.cursor='grab';
+  handle.style.userSelect='none';
+  handle.style.webkitUserSelect='none';
+  function prep(cx,cy){
+    const r=el.getBoundingClientRect();
+    const pr=el.offsetParent?el.offsetParent.getBoundingClientRect():{left:0,top:0};
+    sl=r.left-pr.left; st=r.top-pr.top;
+    el.style.left=sl+'px'; el.style.top=st+'px';
+    el.style.right='auto'; el.style.bottom='auto';
+    sx=cx; sy=cy; drag=true;
+    el.style.zIndex=20; handle.style.cursor='grabbing';
+  }
+  function mv(cx,cy){
+    if(!drag)return;
+    const p=el.offsetParent||document.documentElement;
+    el.style.left=Math.max(0,Math.min(p.clientWidth -el.offsetWidth, sl+(cx-sx)))+'px';
+    el.style.top =Math.max(0,Math.min(p.clientHeight-el.offsetHeight,st+(cy-sy)))+'px';
+  }
+  function end(){drag=false;handle.style.cursor='grab';}
+  handle.addEventListener('mousedown',e=>{
+    if(e.target.closest('button,input,select'))return;
+    e.preventDefault();prep(e.clientX,e.clientY);
+  });
+  document.addEventListener('mousemove',e=>{if(drag)mv(e.clientX,e.clientY);});
+  document.addEventListener('mouseup',end);
+  handle.addEventListener('touchstart',e=>{
+    if(e.target.closest('button,input,select'))return;
+    if(e.touches.length!==1)return;
+    e.preventDefault();prep(e.touches[0].clientX,e.touches[0].clientY);
+  },{passive:false});
+  handle.addEventListener('touchmove',e=>{
+    if(!drag||e.touches.length!==1)return;
+    e.preventDefault();mv(e.touches[0].clientX,e.touches[0].clientY);
+  },{passive:false});
+  document.addEventListener('touchend',end);
+}
+
+// ── Resize-Griff (Maus + Touch; CSS resize:both greift auf iPad nicht) ──────
+function makeResizable(el,minW,minH){
+  minW=minW||150;minH=minH||90;
+  const grip=document.createElement('div');
+  grip.style.cssText='position:absolute;right:0;bottom:0;width:20px;height:20px;'
+    +'cursor:nwse-resize;z-index:22;touch-action:none;border-bottom-right-radius:8px;'
+    +'background:linear-gradient(135deg,transparent 45%,var(--accent) 45%,var(--accent) 60%,transparent 60%,transparent 75%,var(--accent) 75%);opacity:.55';
+  el.appendChild(grip);
+  let sw,sh,sx,sy,rz=false;
+  function prep(cx,cy){
+    const r=el.getBoundingClientRect();
+    const pr=el.offsetParent?el.offsetParent.getBoundingClientRect():{left:0,top:0};
+    // auf links/oben-Verankerung umstellen, damit Wachstum nach unten-rechts geht
+    el.style.left=(r.left-pr.left)+'px';el.style.top=(r.top-pr.top)+'px';
+    el.style.right='auto';el.style.bottom='auto';
+    el.style.maxWidth='none';el.style.maxHeight='none';el.style.overflow='auto';
+    sw=r.width;sh=r.height;sx=cx;sy=cy;rz=true;el.style.zIndex=20;
+  }
+  function mv(cx,cy){
+    if(!rz)return;
+    el.style.width =Math.max(minW,sw+(cx-sx))+'px';
+    el.style.height=Math.max(minH,sh+(cy-sy))+'px';
+  }
+  function end(){rz=false;}
+  grip.addEventListener('mousedown',e=>{e.preventDefault();e.stopPropagation();prep(e.clientX,e.clientY);});
+  document.addEventListener('mousemove',e=>{if(rz)mv(e.clientX,e.clientY);});
+  document.addEventListener('mouseup',end);
+  grip.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;e.preventDefault();e.stopPropagation();prep(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+  grip.addEventListener('touchmove',e=>{if(!rz||e.touches.length!==1)return;e.preventDefault();mv(e.touches[0].clientX,e.touches[0].clientY);},{passive:false});
+  document.addEventListener('touchend',end);
+}
+
+makeDraggable(document.getElementById('vInfo'),        document.getElementById('vInfoHdr'));
+makeDraggable(document.getElementById('mp'),           document.getElementById('mpHdr'));
+makeDraggable(document.getElementById('vInfoSettings'),document.getElementById('vInfoSettingsHdr'));
+makeDraggable(document.getElementById('mpSettings'),   document.getElementById('mpSettingsHdr'));
+makeResizable(document.getElementById('vInfo'),         170,120);
+makeResizable(document.getElementById('mp'),            190,150);
+makeResizable(document.getElementById('vInfoSettings'), 200,150);
+makeResizable(document.getElementById('mpSettings'),    200,150);
+
+// ── App-Version & Changelog ──────────────────────────────────────────────────
+// Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
+// APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
+// der Versionsverlauf aktualisieren sich automatisch.
+const APP_VERSION='1.8';
+const APP_CHANGELOG=[
+  {v:'1.8', date:'2026-06-30', notes:[
+    'Viewer: Mehrfachauswahl von Gruppen – mehrere Werte (z.B. BA_1 + BA_11) gleichzeitig anzeigen; erneutes Antippen blendet wieder aus, „Alle" zeigt alles',
+  ]},
+  {v:'1.7', date:'2026-06-30', notes:[
+    'Maßstab korrigiert: Längeneinheit wird jetzt aus IFCUNITASSIGNMENT bestimmt (Dateien mit mehreren Einheiten METRE/MILLI/CENTI ergaben falsche Maße)',
+    'Fragile Größen-Heuristik entfernt – große Modelle (z.B. 667-m-Brücke) wurden fälschlich als mm gemessen',
+  ]},
+  {v:'1.6', date:'2026-06-29', notes:[
+    'Mess-Punkte werden jetzt konstant klein angezeigt (feste Bildschirmgröße statt Modellgröße) – vorher bei großen Modellen viel zu groß',
+  ]},
+  {v:'1.5', date:'2026-06-29', notes:[
+    'IFC mit Leerzeichen-Formatierung (z.B. „#60 = IFCxxx (…)“ aus DESITE) wird jetzt gelesen – vorher „keine Objekte gefunden“',
+    'Geometrie-Parsing toleriert Leerzeichen in Punkt- und Dreieckslisten',
+    'Darstellungs-Layer (IFCPRESENTATIONLAYERASSIGNMENT) werden als LAYER-Feld nutzbar – auch Stahlbau-Dateien lassen sich nach Layern filtern',
+  ]},
+  {v:'1.4', date:'2026-06-29', notes:[
+    'IFC-Dateien mit Bewehrung als IFCBUILDINGELEMENTPROXY werden jetzt gelesen (z.B. Export aus DESITE / Layer-Konfigurator) – vorher „keine Objekte gefunden“',
+  ]},
+  {v:'1.3', date:'2026-06-29', notes:[
+    'Editor: Wert-Filter – nach Feldauswahl erscheint ein Dropdown mit den vorhandenen Werten; Wert antippen filtert die Tabelle',
+  ]},
+  {v:'1.2', date:'2026-06-29', notes:[
+    'Stichprobe-Abnahme: Positions-Karten (Pos., Soll, Anzahl, Ø, Eingaben) ebenfalls 50 % größer',
+  ]},
+  {v:'1.1', date:'2026-06-29', notes:[
+    'Alle Texte & Zahlen 50 % größer für bessere Lesbarkeit im Außendienst',
+  ]},
+  {v:'1.0', date:'2026-06-29', notes:[
+    'Messwerkzeug mit intelligentem Objektfang (Stabenden & Mitte)',
+    'Live-Distanzanzeige während des Messens',
+    'Maßstab-Autokalibrierung gegen IFC-Einheitenfehler',
+    'Abnahmeprotokoll filtert automatisch auf markierte Stäbe',
+    'Info- & Markierungs-Boxen per Griff in der Größe änderbar',
+    'Stichproben-Abnahme mit Anzahl- und Durchmesser-Prüfung',
+    'Fotos als Beweis in PDF- und CSV/ZIP-Export',
+    'IFC-Editor: Attribute ändern, hinzufügen & als IFC exportieren',
+  ]},
+];
+
+(function initVersion(){
+  const badge=document.getElementById('verBadge');
+  const pop=document.getElementById('verPop');
+  if(!badge||!pop)return;
+  badge.textContent='V'+APP_VERSION;
+  document.title='IFC Bewehrungsabnahme · V'+APP_VERSION;
+  // Versionsverlauf-Popup aufbauen
+  let html='<h4>Versionsverlauf<span class="vc" id="verClose">✕</span></h4>';
+  for(const e of APP_CHANGELOG){
+    html+='<div class="ver-item"><div class="vh">V'+e.v+'<span class="vd">'+e.date+'</span></div><ul>';
+    for(const n of e.notes)html+='<li>'+n+'</li>';
+    html+='</ul></div>';
+  }
+  pop.innerHTML=html;
+  function place(){
+    const r=badge.getBoundingClientRect();
+    pop.style.left=Math.max(8,Math.min(r.left,window.innerWidth-pop.offsetWidth-8))+'px';
+    pop.style.top=(r.bottom+6)+'px';
+  }
+  function toggle(show){
+    const open=show!==undefined?show:pop.style.display!=='block';
+    if(open){pop.style.display='block';place();}
+    else pop.style.display='none';
+  }
+  badge.addEventListener('click',()=>toggle());
+  badge.addEventListener('touchend',e=>{e.preventDefault();toggle();},{passive:false});
+  pop.addEventListener('click',e=>{if(e.target.id==='verClose')toggle(false);});
+  // Schließen bei Klick außerhalb von Badge und Popup (ohne stopPropagation)
+  document.addEventListener('click',e=>{
+    if(e.target!==badge&&!badge.contains(e.target)&&!pop.contains(e.target))toggle(false);
+  });
+  window.addEventListener('resize',()=>{if(pop.style.display==='block')place();});
+})();
+
+</script>
+</body>
+</html>
