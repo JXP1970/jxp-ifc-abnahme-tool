@@ -406,7 +406,7 @@ select.sb-inp{appearance:none}
         <!-- Soll / Ist -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
           <div style="background:var(--card);border:1px solid var(--border);border-radius:7px;padding:12px">
-            <div class="hd-lbl">Soll (Stab-Objekte)</div>
+            <div class="hd-lbl">Soll (markierte Stäbe)</div>
             <div style="font-size:39px;font-weight:700;color:var(--text-strong)" id="ppSoll">–</div>
             <div style="font-size:15px;color:var(--muted)">Stäbe · BarCount lt. IFC: <span id="ppBarCnt">–</span></div>
           </div>
@@ -1450,6 +1450,13 @@ let protoAttrSum=new Set(['Masse','BarWeightTotal']);
 
 function pad2(n){return String(n).padStart(2,'0');}
 function ppBars(pp){const s=new Set(pp.ids);return BARS.filter(b=>s.has(b.id));}
+// Die Anzahl der markierten Stäbe wird beim Anlegen festgehalten statt bei jeder
+// Anzeige neu aus BARS berechnet. Sonst steht nach dem Laden einer anderen
+// IFC-Datei überall 0, weil die Stab-IDs dann nicht mehr auffindbar sind –
+// auch im bereits erzeugten Protokoll.
+function ppAnzahl(pp){return pp.anzahl!==undefined?pp.anzahl:(pp.ids?pp.ids.length:0);}
+// Gehört der Prüfpunkt noch zur geladenen Datei?
+function ppFremd(pp){return !!(pp.datei&&fname&&pp.datei!==fname);}
 function ppPosLabel(pp){
   const s=new Set();ppBars(pp).forEach(b=>s.add(grp(b)));
   return [...s].sort((a,b)=>{const an=parseInt(a),bn=parseInt(b);return isNaN(an)||isNaN(bn)?String(a).localeCompare(b):an-bn;}).join(', ');
@@ -1609,7 +1616,7 @@ function ppStamp(ctx,c,pp){
   ctx.fillStyle=hell?'#55627a':'#b8c4d8';ctx.font=Math.round(18*s)+'px Arial,sans-serif';
   const pos=ppPosLabel(pp);
   const foot='Pos.: '+((pos.length>44?pos.slice(0,42)+'…':pos)||'–')
-    +'   ·   '+pp.ids.length+' Stäbe'
+    +'   ·   '+ppAnzahl(pp)+' Stäbe'
     +(HD.bv?'   ·   '+HD.bv.slice(0,30):'')
     +'   ·   '+(pp.zeit||'');
   ctx.fillText(foot,Math.round(16*s),H-fh/2);
@@ -1621,7 +1628,7 @@ function ppNew(){
   const ids=[...marked],idSet=new Set(ids);
   ppSeq++;
   const pp={
-    nr:ppSeq,titel:'',ids,
+    nr:ppSeq,titel:'',ids,anzahl:ids.length,datei:fname,
     guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
     view:null,bildRaw:null,bildW:0,bildH:0,attrKeys:null,
     kriterien:kritTpl.map(t=>({text:t,status:''})),
@@ -1666,7 +1673,7 @@ function ppStatus(pp){
   if(nio)return{col:'var(--err)',txt:'n.i.O. ('+nio+')',key:'nio'};
   if(k.length&&off===0)return{col:'var(--ok)',txt:'i.O.',key:'io'};
   if(ges||pp.ist!==undefined)return{col:'var(--warn)',txt:'in Arbeit',key:'wip'};
-  return{col:'var(--muted)',txt:pp.ids.length+' Stäbe',key:'off'};
+  return{col:'var(--muted)',txt:ppAnzahl(pp)+' Stäbe',key:'off'};
 }
 
 function ppRenderList(){
@@ -1685,7 +1692,9 @@ function ppRenderList(){
     it.innerHTML='<span class="pp-nr">P'+pp.nr+'</span>'
       +(pp.bildRaw?'<img class="pp-thumb" src="'+pp.bildRaw+'" alt="">':'<div class="pp-thumb"></div>')
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:15px;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(pp.titel||'(ohne Bezeichnung)')+'</div>'
+      +'<div style="font-size:15px;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+      +(ppFremd(pp)?'<span title="aus einer anderen IFC-Datei" style="color:var(--warn)">⚠ </span>':'')
+      +esc(pp.titel||'(ohne Bezeichnung)')+'</div>'
       +'<div style="font-size:13.5px;color:'+st.col+'">'+esc(st.txt)+'</div></div>';
     it.addEventListener('click',()=>ppOpen(pp));
     it.addEventListener('touchend',e=>{e.preventDefault();ppOpen(pp);},{passive:false});
@@ -1704,11 +1713,17 @@ function ppOpen(pp){
   document.getElementById('ppForm').style.display='block';
   document.getElementById('ppNr').textContent='P'+pp.nr;
   document.getElementById('ppTitel').value=pp.titel||'';
-  document.getElementById('ppSub').textContent=
-    pp.ids.length+' Stäbe · Pos. '+(ppPosLabel(pp)||'–')+' · angelegt '+pp.zeit;
+  const sub=document.getElementById('ppSub');
+  sub.textContent=ppAnzahl(pp)+' Stäbe · Pos. '+(ppPosLabel(pp)||'–')+' · angelegt '+pp.zeit;
+  if(ppFremd(pp)){
+    sub.innerHTML=esc(sub.textContent)
+      +'<div style="color:var(--warn);margin-top:4px">⚠ Angelegt aus <b>'+esc(pp.datei)+'</b> – '
+      +'zur geladenen Datei lassen sich Attribute und Positionen nicht mehr auflösen. '
+      +'Anzahl, Bild, Kriterien und Erfassung bleiben erhalten.</div>';
+  }
   const img=document.getElementById('ppBild');
   if(pp.bildRaw){img.src=pp.bildRaw;img.style.display='block';}else img.style.display='none';
-  document.getElementById('ppSoll').textContent=sollStk(ppBars(pp));
+  document.getElementById('ppSoll').textContent=ppAnzahl(pp);
   document.getElementById('ppBarCnt').textContent=barCountAttr(ppBars(pp));
   document.getElementById('ppIst').value=pp.ist!==undefined?pp.ist:'';
   document.getElementById('ppKomm').value=pp.kommentar||'';
@@ -1722,15 +1737,21 @@ function ppOpen(pp){
 function ppRenderAttrs(){
   const c=document.getElementById('ppAttrs');if(!c||!ppCur)return;
   const d=ppAttrData(ppCur);
-  c.innerHTML=d.length
-    ?d.map(([k,v])=>'<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(v)+'</span></div>').join('')
-    :'<div style="color:var(--muted);font-size:15px">Keine Attribute gewählt – „⚙ Auswahl"</div>';
+  if(d.length){
+    c.innerHTML=d.map(([k,v])=>'<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(v)+'</span></div>').join('');
+  } else if(!ppBars(ppCur).length){
+    // Attribute sind gewählt, aber die Stäbe liegen nicht in der geladenen Datei
+    c.innerHTML='<div style="color:var(--warn);font-size:15px;line-height:1.5">Stäbe in der geladenen Datei nicht gefunden – '
+      +'Attribute lassen sich nicht auflösen.'+(ppCur.datei?'<br>Angelegt aus <b>'+esc(ppCur.datei)+'</b>.':'')+'</div>';
+  } else {
+    c.innerHTML='<div style="color:var(--muted);font-size:15px">Keine Attribute gewählt – „⚙ Auswahl"</div>';
+  }
 }
 
 function ppDelta(){
   const el=document.getElementById('ppDelta');if(!el||!ppCur)return;
   if(ppCur.ist===undefined){el.style.display='none';return;}
-  const soll=sollStk(ppBars(ppCur)),diff=ppCur.ist-soll;
+  const soll=ppAnzahl(ppCur),diff=ppCur.ist-soll;
   el.style.display='block';
   if(diff===0){el.style.background='var(--ok-bg)';el.style.border='1px solid var(--ok)';el.style.color='var(--ok)';el.textContent='✓ Anzahl stimmt';}
   else{el.style.background='var(--warn-bg)';el.style.border='1px solid var(--warn)';el.style.color='var(--warn)';el.textContent='Differenz: '+(diff>0?'+':'')+diff+' Stäbe';}
@@ -1916,10 +1937,10 @@ async function ppPDF(pp){
     y+=ih+7;
   }
 
-  const soll=sollStk(ppBars(pp)),diff=pp.ist!==undefined?pp.ist-soll:null;
+  const soll=ppAnzahl(pp),diff=pp.ist!==undefined?pp.ist-soll:null;
   need(14);
   d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
-  d.text('SOLL (STAB-OBJEKTE)',L,y);d.text('IST (VOR ORT)',L+45,y);d.text('DIFFERENZ',L+80,y);
+  d.text('SOLL (MARKIERTE STÄBE)',L,y);d.text('IST (VOR ORT)',L+45,y);d.text('DIFFERENZ',L+80,y);
   d.text('BARCOUNT LT. IFC',L+114,y);
   d.setFont('helvetica','bold');d.setFontSize(13);d.setTextColor(20);
   d.text(String(soll),L,y+6);
@@ -2083,9 +2104,9 @@ function ppCSV(){
   const head=['Prüfpunkt','Bezeichnung','Positionen','Stäbe','Soll','Ist','Differenz','Kommentar','Angelegt',...kritCols];
   const lines=[head];
   PP.forEach(pp=>{
-    const soll=sollStk(ppBars(pp));
+    const soll=ppAnzahl(pp);
     const map={};(pp.kriterien||[]).forEach(k=>{map[k.text]=k.status==='io'?'i.O.':k.status==='nio'?'n.i.O.':k.status==='nz'?'n.z.':'';});
-    lines.push(['P'+pad2(pp.nr),pp.titel||'',ppPosLabel(pp),pp.ids.length,soll,
+    lines.push(['P'+pad2(pp.nr),pp.titel||'',ppPosLabel(pp),ppAnzahl(pp),soll,
       pp.ist!==undefined?pp.ist:'',pp.ist!==undefined?pp.ist-soll:'',
       pp.kommentar||'',pp.zeit,...kritCols.map(c=>map[c]||'')]);
   });
@@ -2317,7 +2338,8 @@ function saveStichprobe(status){
   const pp={
     nr:ppSeq,
     titel:'Stichprobe '+(posLbl.length>34?posLbl.slice(0,32)+'…':posLbl),
-    ids,guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
+    ids,anzahl:ids.length,datei:fname,
+    guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
     view:ppView(),bildRaw:null,bildW:0,bildH:0,attrKeys:null,
     kriterien:[
       {text:'Stabanzahl je Position',status:zaehlung.every(z=>z.ist===undefined||z.ist===z.soll)?'io':'nio'},
@@ -2853,12 +2875,18 @@ makeResizable(document.getElementById('vInfoSettings'), 200,150);
 makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.2';
+const APP_VERSION='2.3';
 const APP_CHANGELOG=[
+  {v:'2.3', date:'2026-07-23', notes:[
+    'Soll: die Anzahl der markierten Stäbe wird beim Anlegen des Prüfpunkts festgehalten statt bei jeder Anzeige neu aus der Datei ermittelt',
+    'Dadurch behoben: nach dem Laden einer anderen IFC-Datei stand bei allen Prüfpunkten „Soll 0" – auch im bereits erzeugten Protokoll',
+    'Prüfpunkte aus einer anderen Datei werden jetzt gekennzeichnet, statt Attribute und Positionen kommentarlos leer zu lassen',
+  ]},
   {v:'2.2', date:'2026-07-23', notes:[
     'Helle Ansicht: Umschalter ☀/☾ im Kopf. Auf der Baustelle ist die Spiegelung im Display oft heller als das Display selbst – dunkle Oberflächen sind dort kaum ablesbar. Die Wahl wird gespeichert, ohne Wahl gilt die Systemeinstellung',
     'Modellbild für den Export wahlweise hell – in einer Dalux-Checkliste und im Ausdruck deutlich besser lesbar als das fast schwarze Bild',
