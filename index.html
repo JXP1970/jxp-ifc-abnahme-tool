@@ -9,10 +9,14 @@
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0b0d12;--panel:#0e1018;--border:#1c2130;
-  --accent:#00c8ff;--text:#b8c4d8;--muted:#3a4560;
-  --ok:#00e676;--warn:#ffaa00;--err:#ff4466;
+  --bg:#0b0d12;--panel:#0e1018;--border:#2a3547;
+  --accent:#00c8ff;--text:#c9d4e6;--muted:#8a97b0;
+  --line:#1e2636;                 /* Zeilentrenner in Listen und Tabellen */
+  --ok:#00e676;--warn:#ffaa00;--err:#ff5c7a;
 }
+/* --muted trug 57 Beschriftungen bei nur 2,04:1 Kontrast und war damit
+   praktisch unlesbar; jetzt 6,6:1. --line ersetzt die alten Trenner mit
+   1,06:1, bei denen Tabellenzeilen ineinanderliefen. */
 html,body{height:100%;background:var(--bg);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:18px;overflow:hidden}
 /* HEADER */
 header{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--border);flex-shrink:0;height:48px}
@@ -56,7 +60,7 @@ header{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(
 .sb-list{flex:1;overflow-y:auto;padding:3px 0}
 .sb-list::-webkit-scrollbar{width:3px}.sb-list::-webkit-scrollbar-thumb{background:var(--border)}
 .sb-foot{padding:6px 12px;border-top:1px solid var(--border);font-size:15px;color:var(--muted)}
-.si{display:flex;align-items:center;gap:7px;padding:7px 12px;cursor:pointer;border-bottom:1px solid #0f1520;user-select:none;touch-action:manipulation;transition:background .1s;font-size:16.5px}
+.si{display:flex;align-items:center;gap:7px;padding:7px 12px;cursor:pointer;border-bottom:1px solid var(--line);user-select:none;touch-action:manipulation;transition:background .1s;font-size:16.5px}
 .si:hover{background:#121824}.si.active{background:#0a1a30;color:var(--accent)}
 .si-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
 .si-cnt{margin-left:auto;font-size:15px;color:var(--muted);background:#1a2535;padding:1px 6px;border-radius:8px}
@@ -70,7 +74,7 @@ header{display:flex;align-items:center;gap:10px;padding:8px 16px;background:var(
 table{width:100%;border-collapse:collapse;font-size:16.5px}
 thead th{padding:6px 10px;text-align:left;font-size:13.5px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);position:sticky;top:0;background:#0a0c11;cursor:pointer;user-select:none;white-space:nowrap}
 thead th:hover{color:var(--accent)}
-tbody tr{border-bottom:1px solid #0f1520;cursor:pointer;transition:background .1s}
+tbody tr{border-bottom:1px solid var(--line);cursor:pointer;transition:background .1s}
 tbody tr:hover{background:#0d1525}
 tbody tr.sel{background:#0a1e35}
 tbody tr.edited td:first-child{border-left:2px solid var(--warn)}
@@ -105,7 +109,7 @@ td{padding:6px 10px;vertical-align:middle;white-space:nowrap;overflow:hidden;tex
 .v-stats{position:absolute;bottom:0;left:0;right:0;padding:4px 12px;background:rgba(14,16,24,.85);border-top:1px solid var(--border);font-size:13.5px;color:var(--muted);display:flex;gap:12px}
 .v-info{position:absolute;top:10px;right:10px;background:rgba(14,16,24,.95);border:1px solid var(--border);border-radius:8px;padding:11px 13px;min-width:170px;display:none;backdrop-filter:blur(8px);font-size:16.5px;z-index:3;max-width:230px}
 .v-info.show{display:block}
-.vir{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid #1a2030;font-size:15px}
+.vir{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid var(--line);font-size:15px}
 .vir:last-child{border:none}
 .vik{color:var(--muted)}.viv{color:#dce8ff}
 /* MARK PANEL */
@@ -115,7 +119,7 @@ td{padding:6px 10px;vertical-align:middle;white-space:nowrap;overflow:hidden;tex
 .ab-left{width:220px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 .ab-ctr{flex:1;display:flex;flex-direction:column;overflow-y:auto;padding:18px 20px}
 .ab-right{width:240px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
-.ab-item{display:flex;align-items:center;gap:7px;padding:8px 12px;cursor:pointer;border-bottom:1px solid #0f1520;touch-action:manipulation;transition:background .1s;font-size:16.5px}
+.ab-item{display:flex;align-items:center;gap:7px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--line);touch-action:manipulation;transition:background .1s;font-size:16.5px}
 .ab-item:hover{background:#121824}.ab-item.active{background:#0a1a30}
 /* OVERLAY */
 .ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:50}
@@ -140,13 +144,13 @@ td{padding:6px 10px;vertical-align:middle;white-space:nowrap;overflow:hidden;tex
 .settings-panel{display:none;position:absolute;background:rgba(14,16,24,.97);border:1px solid var(--accent);border-radius:9px;padding:13px;width:230px;z-index:10;backdrop-filter:blur(10px);font-size:16.5px}
 select.sb-inp{appearance:none}
 /* PRUEFPUNKTE */
-.pp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid #0f1520;touch-action:manipulation;transition:background .1s}
+.pp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--line);touch-action:manipulation;transition:background .1s}
 .pp-item:hover{background:#121824}.pp-item.active{background:#0a1a30}
 .pp-thumb{width:46px;height:34px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0;background:#080a0f}
 .pp-nr{font-size:15px;font-weight:700;color:var(--accent);flex-shrink:0;min-width:26px}
 .pp-card{background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:14px}
 .pp-card h3{font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;font-weight:400;display:flex;justify-content:space-between;align-items:center}
-.krit-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #121824}
+.krit-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line)}
 .krit-row:last-child{border:none}
 .krit-txt{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:16.5px;outline:none;padding:2px 3px;border-radius:3px}
 .krit-txt:focus{background:#0d1525}
@@ -1704,7 +1708,7 @@ function ppAttrModalRender(){
   for(const k of keys){
     const numeric=BARS.some(b=>!isNaN(parseFloat(b.props[k])));
     const row=document.createElement('div');
-    row.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid #121824';
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid var(--line)';
     row.innerHTML='<input type="checkbox" '+(sel.has(k)?'checked':'')+' style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">'
       +'<span style="flex:1;font-size:15px;color:'+(sel.has(k)?'#dce8ff':'var(--muted)')+'">'+esc(k)+'</span>'
       +(numeric?'<button class="kb'+(protoAttrSum.has(k)?' on-io':'')+'" style="width:32px;height:27px;font-size:14px" title="über die Auswahl summieren">Σ</button>':'');
@@ -2736,8 +2740,13 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.0';
+const APP_VERSION='2.1';
 const APP_CHANGELOG=[
+  {v:'2.1', date:'2026-07-23', notes:[
+    'Lesbarkeit: Beschriftungsfarbe von 2,04:1 auf 6,6:1 Kontrast angehoben – sie trug 57 Beschriftungen (Tabellenköpfe, Attributnamen, Hinweise) und war auf dem dunklen Hintergrund kaum lesbar',
+    'Zeilentrenner in Listen und Tabellen sichtbar gemacht (vorher 1,06:1, Zeilen liefen ineinander)',
+    'Fließtext und Rahmen leicht aufgehellt, Rot für „n.i.O." kontraststärker',
+  ]},
   {v:'2.0', date:'2026-07-23', notes:[
     'Abnahme neu organisiert: Prüfpunkte werden im Viewer am Modell festgelegt („＋ Prüfpunkt“) statt automatisch aus allen Modellgruppen erzeugt',
     'Jeder Prüfpunkt speichert Kameraansicht, beschriftetes Modellbild, Stab-GUIDs, Attributauswahl und Prüfkriterien',
