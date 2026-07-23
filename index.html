@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>IFC Bewehrungsabnahme</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -138,6 +139,25 @@ td{padding:6px 10px;vertical-align:middle;white-space:nowrap;overflow:hidden;tex
 /* SETTINGS PANEL */
 .settings-panel{display:none;position:absolute;background:rgba(14,16,24,.97);border:1px solid var(--accent);border-radius:9px;padding:13px;width:230px;z-index:10;backdrop-filter:blur(10px);font-size:16.5px}
 select.sb-inp{appearance:none}
+/* PRUEFPUNKTE */
+.pp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid #0f1520;touch-action:manipulation;transition:background .1s}
+.pp-item:hover{background:#121824}.pp-item.active{background:#0a1a30}
+.pp-thumb{width:46px;height:34px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0;background:#080a0f}
+.pp-nr{font-size:15px;font-weight:700;color:var(--accent);flex-shrink:0;min-width:26px}
+.pp-card{background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:14px}
+.pp-card h3{font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;font-weight:400;display:flex;justify-content:space-between;align-items:center}
+.krit-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #121824}
+.krit-row:last-child{border:none}
+.krit-txt{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:16.5px;outline:none;padding:2px 3px;border-radius:3px}
+.krit-txt:focus{background:#0d1525}
+.kb{width:38px;height:32px;border-radius:4px;border:1px solid var(--border);background:#0d1119;color:var(--muted);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:manipulation;flex-shrink:0}
+.kb.on-io{border-color:#00cc66;color:#00cc66;background:#0a2010}
+.kb.on-nio{border-color:var(--err);color:var(--err);background:#1a0a10}
+.kb.on-nz{border-color:var(--muted);color:#dce8ff;background:#161c28}
+.kh{width:38px;text-align:center;font-size:12px;color:var(--muted);flex-shrink:0}
+.hd-inp{width:100%;background:#080a0f;border:1px solid var(--border);border-radius:4px;padding:5px 7px;color:var(--text);font-family:inherit;font-size:15px;outline:none;margin-bottom:6px}
+.hd-inp:focus{border-color:var(--accent)}
+.hd-lbl{font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -260,7 +280,8 @@ select.sb-inp{appearance:none}
         </div>
         <button class="btn btn-s" id="mpIso" style="width:100%;margin-top:5px;font-size:15px;padding:6px;border-color:var(--accent);color:var(--accent)">🎯 Isolieren</button>
         <button class="btn btn-s" id="mpIsoOff" style="width:100%;margin-top:5px;font-size:15px;padding:6px;border-color:var(--warn);color:var(--warn);display:none">🌐 Alle zeigen</button>
-        <button class="btn btn-p" id="mpStich" style="width:100%;margin-top:5px;font-size:15px;padding:7px;touch-action:manipulation">📋 Stichprobe</button>
+        <button class="btn btn-p" id="mpPP" style="width:100%;margin-top:5px;font-size:15px;padding:8px;touch-action:manipulation">＋ Prüfpunkt</button>
+        <button class="btn btn-s" id="mpStich" style="width:100%;margin-top:5px;font-size:15px;padding:7px;touch-action:manipulation;border-color:var(--accent);color:var(--accent)">📋 Stichprobe</button>
       </div>
       <!-- Mark settings -->
       <div class="settings-panel" id="mpSettings" style="bottom:36px;left:12px">
@@ -284,78 +305,145 @@ select.sb-inp{appearance:none}
   </div>
 </div>
 
-<!-- ══ ABNAHME ══ -->
+<!-- ══ ABNAHME / PRÜFPROTOKOLL ══ -->
 <div class="panel" id="panelAbnahme">
   <div class="ab-wrap">
+
+    <!-- LINKS: Prüfpunktliste -->
     <div class="ab-left">
       <div class="sb-head">
-        <div class="sb-label">Positionen</div>
-        <div id="abProg" style="font-size:15px;color:var(--muted);margin-top:3px">–</div>
-        <div id="abFilterNote" style="display:none;font-size:15px;color:var(--accent);margin-top:2px">⬚ Aus Markierung</div>
+        <div class="sb-label">Prüfpunkte</div>
+        <div id="ppProg" style="font-size:15px;color:var(--muted);margin-top:3px">–</div>
       </div>
-      <div class="sb-list" id="abList"></div>
+      <div class="sb-list" id="ppList"></div>
       <div style="padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
-        <button class="btn btn-p" id="abCSV" style="width:100%;padding:7px">⬇ CSV</button>
-        <button class="btn btn-s" id="abPDF" style="width:100%;padding:7px">⬇ PDF</button>
+        <div class="hd-lbl">Kästchen im Export</div>
+        <select class="sb-inp" id="ppBoxMode" style="margin-bottom:3px">
+          <option value="leer">leer – vor Ort abhaken</option>
+          <option value="voll">ausgefüllt – Status aus App</option>
+        </select>
+        <button class="btn btn-p" id="ppExpZip" style="width:100%;padding:7px">⬇ Dalux-Paket (ZIP)</button>
+        <button class="btn btn-s" id="ppExpCSV" style="width:100%;padding:7px">⬇ CSV</button>
       </div>
     </div>
-    <div class="ab-ctr" id="abCtr">
-      <div id="abEmpty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:8px">
+
+    <!-- MITTE: gewählter Prüfpunkt -->
+    <div class="ab-ctr" id="ppCtr">
+      <div id="ppEmpty" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--muted);gap:10px;text-align:center">
         <span style="font-size:54px;opacity:.2">📋</span>
-        <span>Position wählen</span>
+        <span>Noch kein Prüfpunkt</span>
+        <span style="font-size:15px;max-width:320px;line-height:1.6">Im <b>3D&nbsp;Viewer</b> Stäbe markieren und dort auf<br><b style="color:var(--accent)">＋ Prüfpunkt</b> tippen.</span>
       </div>
-      <div id="abForm" style="display:none">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-          <div>
-            <div style="font-size:25.5px;font-weight:700;color:#dce8ff" id="abTitle">–</div>
-            <div style="font-size:15px;color:var(--muted);margin-top:2px" id="abSub">–</div>
-          </div>
-          <div id="abBadge" style="padding:5px 12px;border-radius:5px;font-size:16.5px;font-weight:700;border:2px solid var(--border);color:var(--muted)">OFFEN</div>
+
+      <div id="ppForm" style="display:none">
+        <!-- Kopfzeile -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="font-size:25.5px;font-weight:700;color:var(--accent);flex-shrink:0" id="ppNr">P1</div>
+          <input id="ppTitel" class="t-inp" placeholder="Bezeichnung, z.B. Achse C – untere Lage" style="flex:1;min-width:180px;font-size:18px">
+          <button class="btn btn-d" id="ppDel" style="flex-shrink:0" title="Prüfpunkt löschen">🗑</button>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div style="font-size:15px;color:var(--muted);margin-bottom:12px" id="ppSub">–</div>
+
+        <!-- Modellbild -->
+        <div class="pp-card">
+          <h3>Modellansicht
+            <span style="display:flex;gap:5px">
+              <button class="btn btn-s" id="ppViewGo" style="font-size:13.5px;padding:3px 8px">↗ Ansicht</button>
+              <button class="btn btn-s" id="ppShot" style="font-size:13.5px;padding:3px 8px" title="Bild mit der aktuellen Viewer-Ansicht neu aufnehmen">⟳ Neu aufnehmen</button>
+            </span>
+          </h3>
+          <img id="ppBild" style="width:100%;border-radius:5px;border:1px solid var(--border);display:block">
+        </div>
+
+        <!-- Soll / Ist -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
           <div style="background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px">
-            <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Soll (IFC)</div>
-            <div style="font-size:39px;font-weight:700;color:#dce8ff" id="abSoll">–</div>
+            <div class="hd-lbl">Soll (Stab-Objekte)</div>
+            <div style="font-size:39px;font-weight:700;color:#dce8ff" id="ppSoll">–</div>
+            <div style="font-size:15px;color:var(--muted)">Stäbe · BarCount lt. IFC: <span id="ppBarCnt">–</span></div>
+          </div>
+          <div style="background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px">
+            <div class="hd-lbl">Ist (vor Ort)</div>
+            <input id="ppIst" type="number" min="0" placeholder="–" style="width:100%;background:transparent;border:none;outline:none;font-size:39px;font-weight:700;color:var(--accent);font-family:inherit;padding:0">
             <div style="font-size:15px;color:var(--muted)">Stäbe</div>
           </div>
-          <div style="background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px">
-            <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Ist (vor Ort)</div>
-            <input id="abIst" type="number" min="0" placeholder="–" style="width:100%;background:transparent;border:none;outline:none;font-size:39px;font-weight:700;color:var(--accent);font-family:inherit;padding:0">
-            <div style="font-size:15px;color:var(--muted)">Stäbe</div>
+        </div>
+        <div id="ppDelta" style="display:none;padding:9px 12px;border-radius:6px;margin-bottom:14px;font-size:18px;font-weight:600"></div>
+
+        <!-- Attribute -->
+        <div class="pp-card">
+          <h3>IFC-Attribute
+            <span style="display:flex;gap:5px;align-items:center">
+              <span id="ppAttrScope" style="font-size:12px;text-transform:none;letter-spacing:0"></span>
+              <button class="btn btn-s" id="ppAttrCfg" style="font-size:13.5px;padding:3px 8px">⚙ Auswahl</button>
+            </span>
+          </h3>
+          <div id="ppAttrs"></div>
+        </div>
+
+        <!-- Prüfkriterien -->
+        <div class="pp-card">
+          <h3>Prüfkriterien
+            <span style="display:flex;gap:5px">
+              <button class="btn btn-s" id="ppKritAdd" style="font-size:13.5px;padding:3px 8px">＋ Zeile</button>
+              <button class="btn btn-s" id="ppKritFromTpl" style="font-size:13.5px;padding:3px 8px" title="Kriterien aus der Vorlage rechts neu laden">↺ Vorlage</button>
+            </span>
+          </h3>
+          <div style="display:flex;gap:8px;align-items:center;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:3px">
+            <span style="flex:1"></span>
+            <span class="kh">i.O.</span><span class="kh">n.i.O.</span><span class="kh">n.z.</span>
+            <span style="width:28px"></span>
           </div>
+          <div id="ppKrit"></div>
         </div>
-        <div id="abDelta" style="display:none;padding:9px 12px;border-radius:6px;margin-bottom:14px;font-size:18px;font-weight:600"></div>
-        <div style="background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:14px">
-          <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px">IFC Attribute</div>
-          <div id="abAttrs"></div>
-        </div>
+
+        <!-- Kommentar -->
         <div style="margin-bottom:14px">
-          <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Kommentar</div>
-          <textarea id="abKomm" rows="3" style="width:100%;background:#080a0f;border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:inherit;font-size:16.5px;resize:vertical;outline:none;line-height:1.5" placeholder="Bemerkungen…"></textarea>
+          <div class="hd-lbl">Kommentar</div>
+          <textarea id="ppKomm" rows="3" style="width:100%;background:#080a0f;border:1px solid var(--border);border-radius:6px;padding:8px;color:var(--text);font-family:inherit;font-size:16.5px;resize:vertical;outline:none;line-height:1.5" placeholder="Bemerkungen…"></textarea>
         </div>
-        <div style="margin-bottom:16px">
-          <div style="font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:5px">Foto</div>
+
+        <!-- Baustellenfoto -->
+        <div style="margin-bottom:14px">
+          <div class="hd-lbl">Baustellenfoto</div>
           <div style="display:flex;align-items:center;gap:8px">
-            <input type="file" accept="image/*" capture="environment" id="abFoto" style="display:none">
-            <button class="btn btn-s" id="abFotoBtn">📷 Foto</button>
-            <span id="abFotoName" style="font-size:15px;color:var(--muted)"></span>
+            <input type="file" accept="image/*" capture="environment" id="ppFoto" style="display:none">
+            <button class="btn btn-s" id="ppFotoBtn">📷 Foto</button>
+            <span id="ppFotoName" style="font-size:15px;color:var(--muted)"></span>
           </div>
-          <img id="abFotoImg" style="display:none;margin-top:8px;max-width:100%;max-height:150px;border-radius:6px;border:1px solid var(--border)">
+          <img id="ppFotoImg" style="display:none;margin-top:8px;max-width:100%;max-height:170px;border-radius:6px;border:1px solid var(--border)">
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn" id="abOk" style="flex:1;min-width:80px;padding:11px;font-size:18px;background:#0a2010;border:2px solid #00cc66;color:#00cc66;touch-action:manipulation">✓ Bestanden</button>
-          <button class="btn" id="abAbw" style="flex:1;min-width:80px;padding:11px;font-size:18px;background:#1a1000;border:2px solid #ffaa00;color:#ffaa00;touch-action:manipulation">⚠ Abweichung</button>
-          <button class="btn" id="abOff" style="flex:1;min-width:80px;padding:11px;font-size:18px;background:#1a2535;border:1px solid var(--border);color:var(--muted);touch-action:manipulation">○ Offen</button>
+
+        <!-- Export -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px">
+          <button class="btn btn-p" id="ppExpPDF" style="flex:1;min-width:120px;padding:11px;font-size:18px;touch-action:manipulation">⬇ PDF</button>
+          <button class="btn btn-s" id="ppExpPNG" style="flex:1;min-width:120px;padding:11px;font-size:18px;touch-action:manipulation">⬇ Screenshot</button>
         </div>
       </div>
     </div>
+
+    <!-- RECHTS: Protokollkopf + Kriterienvorlage -->
     <div class="ab-right">
-      <div class="sb-head"><div class="sb-label">Protokoll</div></div>
-      <div style="flex:1;overflow-y:auto;padding:8px 10px" id="abProtokoll"></div>
+      <div class="sb-head"><div class="sb-label">Protokollkopf</div></div>
+      <div style="flex:1;overflow-y:auto;padding:9px 11px">
+        <div class="hd-lbl">Bauvorhaben</div><input class="hd-inp" id="hdBv" data-hd="bv" placeholder="z.B. Neubau Halle 4">
+        <div class="hd-lbl">Bauteil</div><input class="hd-inp" id="hdBt" data-hd="bt" placeholder="z.B. Bodenplatte BA 1">
+        <div class="hd-lbl">Achse / Abschnitt</div><input class="hd-inp" id="hdAc" data-hd="ac" placeholder="z.B. A–F / 1–12">
+        <div class="hd-lbl">Prüfer</div><input class="hd-inp" id="hdPr" data-hd="pr" placeholder="Name">
+        <div class="hd-lbl">Firma</div><input class="hd-inp" id="hdFa" data-hd="fa" placeholder="Firma">
+        <div class="hd-lbl">Datum</div><input class="hd-inp" id="hdDt" data-hd="dt" type="date">
+        <hr class="d-sep">
+        <div class="hd-lbl" style="display:flex;justify-content:space-between;align-items:center">
+          <span>Kriterien-Vorlage</span>
+          <button class="btn btn-s" id="tplAdd" style="font-size:13.5px;padding:2px 7px">＋</button>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin:4px 0 7px">Gilt für neu angelegte Prüfpunkte. Wird im Browser gespeichert.</div>
+        <div id="tplList"></div>
+      </div>
       <div style="padding:8px 12px;border-top:1px solid var(--border);font-size:15px;display:flex;flex-direction:column;gap:2px">
-        <span id="abOkCnt" style="color:var(--ok)">✓ 0</span>
-        <span id="abAbwCnt" style="color:var(--warn)">⚠ 0</span>
-        <span id="abOffCnt" style="color:var(--muted)">○ 0</span>
+        <span id="ppOkCnt" style="color:var(--ok)">i.O. 0</span>
+        <span id="ppNioCnt" style="color:var(--err)">n.i.O. 0</span>
+        <span id="ppOffCnt" style="color:var(--muted)">offen 0</span>
       </div>
     </div>
   </div>
@@ -380,6 +468,24 @@ select.sb-inp{appearance:none}
   <div class="pb"><div class="pf" id="pf" style="width:0%"></div></div>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- ATTRIBUT-AUSWAHL FÜRS PROTOKOLL -->
+<div id="ppAttrModal" style="display:none;position:fixed;inset:0;z-index:46;background:rgba(5,7,9,.88);backdrop-filter:blur(5px);overflow-y:auto;padding:20px 14px;-webkit-overflow-scrolling:touch">
+  <div style="max-width:430px;margin:auto;background:var(--panel);border:1px solid var(--accent);border-radius:12px;overflow:hidden">
+    <div style="padding:11px 14px;background:#050709;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="font-weight:700;font-size:19.5px;color:#dce8ff">Attribute im Protokoll</div>
+      <button class="btn btn-s" id="ppAttrClose" style="padding:3px 9px;touch-action:manipulation">✕</button>
+    </div>
+    <div style="padding:9px 14px;font-size:13.5px;color:var(--muted);line-height:1.6">
+      Häkchen = erscheint im Protokoll. <b style="color:var(--accent)">Σ</b> = über alle Stäbe des Prüfpunkts summieren statt Einzelwert.
+    </div>
+    <div id="ppAttrListBox" style="max-height:50vh;overflow-y:auto;padding:0 14px"></div>
+    <div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-s" id="ppAttrScopeTgl" style="flex:1;min-width:150px;padding:9px;font-size:15px;touch-action:manipulation">Nur für diesen Prüfpunkt</button>
+      <button class="btn btn-p" id="ppAttrOk" style="flex:1;min-width:100px;padding:9px;font-size:16.5px;touch-action:manipulation">Übernehmen</button>
+    </div>
+  </div>
+</div>
 
 <!-- STICHPROBEN-MODAL -->
 <div id="stichModal" style="display:none;position:fixed;inset:0;z-index:45;background:rgba(5,7,9,.88);backdrop-filter:blur(5px);overflow-y:auto;padding:20px 14px;-webkit-overflow-scrolling:touch">
@@ -712,7 +818,7 @@ function switchTab(t){
     document.getElementById('panel'+id).classList.toggle('active',t===id.toLowerCase());
     document.getElementById('tab'+id).classList.toggle('active',t===id.toLowerCase());
   });
-  if(t==='abnahme')buildAbList();
+  if(t==='abnahme')ppRenderList();
 }
 document.getElementById('tabEditor').addEventListener('click',()=>switchTab('editor'));
 document.getElementById('tabViewer').addEventListener('click',()=>switchTab('viewer'));
@@ -847,9 +953,9 @@ function updateMP(){
   const cnt=marked.size;
   const mp=document.getElementById('mp');
   document.getElementById('hbClear').style.display=cnt?'flex':'none';
+  document.getElementById('mpCount').textContent=cnt+(cnt===1?' Stab':' Stäbe')+' markiert';
   if(!cnt){mp.style.display='none';return;}
   mp.style.display='block';
-  document.getElementById('mpCount').textContent=cnt+' Stab'+(cnt!==1?'e':'')+' markiert';
   let totals={},posCnts={};
   for(const m of meshes){
     if(!marked.has(m.userData.id))continue;
@@ -1212,20 +1318,19 @@ function dlIFC(){
   a.click();toast('IFC exportiert');
 }
 
-function abGrps(markedOnly){
-  const g={};
-  if(markedOnly&&marked.size){
-    for(const mesh of meshes){
-      if(!marked.has(mesh.userData.id))continue;
-      const k=mesh.userData.grp||grp(mesh.userData.bar);
-      if(!g[k])g[k]=[];g[k].push(mesh.userData.bar);
-    }
-  } else {
-    BARS.forEach(b=>{const k=grp(b);if(!g[k])g[k]=[];g[k].push(b);});
-  }
-  return g;
+// Soll-Stückzahl = Anzahl der tatsächlich ausgewählten Stab-Objekte.
+// Frühere Fassung summierte BarCount über alle Objekte. Das quadriert, sobald
+// jedes Objekt ein Einzelstab ist und BarCount die Verlegemenge der ganzen
+// Position trägt: 6 Stäbe mit BarCount 6 ergaben ein "Soll" von 36.
+// Die Objektanzahl ist aus der Geometrie belegbar; BarCount wird daneben
+// unverändert als IFC-Attribut ausgewiesen.
+function sollStk(bars){return bars.length;}
+// BarCount laut IFC – zur Gegenkontrolle, nicht als Soll verwendet
+function barCountAttr(bars){
+  const v=new Set();
+  bars.forEach(b=>{const n=parseFloat(b.props['BarCount']||b.props['Stabanzahl_Verlegung']);if(!isNaN(n))v.add(Math.round(n));});
+  return v.size?[...v].sort((a,b)=>a-b).join(' / '):'–';
 }
-function getSoll(bars){let t=0;bars.forEach(b=>{const v=parseFloat(b.props['BarCount']||b.props['Stabanzahl_Verlegung']||1);t+=v;});return Math.round(t);}
 function getSollDm(bars){
   for(const b of bars){
     const sd=parseFloat(b.props['Stabdurchmesser']);if(!isNaN(sd)&&sd>0)return Math.round(sd);
@@ -1234,224 +1339,768 @@ function getSollDm(bars){
   return null;
 }
 
-function buildAbList(){
-  if(!BARS.length){document.getElementById('abProg').textContent='Keine Datei';document.getElementById('abList').innerHTML='<div style="padding:14px 12px;color:var(--muted);font-size:10px">IFC laden</div>';return;}
-  const useMarked=marked.size>0;
-  const gs=abGrps(useMarked);
-  const _fn=document.getElementById('abFilterNote');
-  if(_fn){
-    _fn.style.display=useMarked?'block':'none';
-    if(useMarked)_fn.textContent='⬚ Aus Markierung: '+marked.size+' Stäbe · '+Object.keys(gs).length+' Pos.';
+// ── Prüfpunkte: Prüfumfang am Modell festlegen, Protokoll für Dalux erzeugen ──
+// Ein Prüfpunkt entsteht aus der Viewer-Markierung und hält Stab-IDs, GUIDs,
+// die Kameraansicht, ein gerendertes Modellbild, Attributauswahl, Prüfkriterien
+// und die Vor-Ort-Erfassung. Der GUID-Bezug macht ihn unabhängig vom Gruppierfeld.
+
+let PP=[];            // alle Prüfpunkte
+let ppSeq=0;          // fortlaufende Nummer (P1, P2, …)
+let ppCur=null;       // aktuell geöffneter Prüfpunkt
+const HD={bv:'',bt:'',ac:'',pr:'',fa:'',dt:''};   // Protokollkopf
+let kritTpl=[];       // Kriterien-Vorlage für neue Prüfpunkte (frei befüllbar)
+let protoAttrKeys=null;                            // Attribut-Vorgabe fürs Protokoll
+// BarCount bewusst nicht vorbelegt: eine Summe darüber ist bei Einzelstab-Objekten
+// irreführend. Der Wert wird separat als "BarCount lt. IFC" ausgewiesen.
+let protoAttrSum=new Set(['Masse','BarWeightTotal']);
+
+function pad2(n){return String(n).padStart(2,'0');}
+function ppBars(pp){const s=new Set(pp.ids);return BARS.filter(b=>s.has(b.id));}
+function ppPosLabel(pp){
+  const s=new Set();ppBars(pp).forEach(b=>s.add(grp(b)));
+  return [...s].sort((a,b)=>{const an=parseInt(a),bn=parseInt(b);return isNaN(an)||isNaN(bn)?String(a).localeCompare(b):an-bn;}).join(', ');
+}
+function slug(s){return String(s||'').replace(/[^\wäöüÄÖÜß\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,40);}
+function hdDatum(){return HD.dt?new Date(HD.dt).toLocaleDateString('de-DE'):new Date().toLocaleDateString('de-DE');}
+
+// Attribut-Vorgabe beim ersten Zugriff aus den tatsächlich vorhandenen Feldern
+function protoKeys(){
+  if(!protoAttrKeys){
+    const av=new Set();BARS.forEach(b=>Object.keys(b.props).forEach(k=>av.add(k)));
+    const pref=['Pos_Nr.','Position number','Stabdurchmesser','NominalDiameter','BarLength','BarDistance','BarCount','Masse','Materialguete','LAYER'];
+    protoAttrKeys=new Set(pref.filter(k=>av.has(k)));
   }
-  const keys=Object.keys(gs).sort((a,b)=>{const an=parseInt(a),bn=parseInt(b);return isNaN(an)||isNaN(bn)?a.localeCompare(b):an-bn;});
-  let ok=0,abw=0,off=0;keys.forEach(k=>{const s=(protokoll[k]||{}).status||'offen';if(s==='ok')ok++;else if(s==='abweichung')abw++;else off++;});
-  document.getElementById('abProg').textContent='OK:'+ok+' ABW:'+abw+' OFF:'+off;
-  document.getElementById('abOkCnt').textContent='OK '+ok;
-  document.getElementById('abAbwCnt').textContent='ABW '+abw;
-  document.getElementById('abOffCnt').textContent='OFF '+off;
-  const list=document.getElementById('abList');list.innerHTML='';
-  keys.forEach(pos=>{
-    const bars=gs[pos],e=protokoll[pos]||{},st=e.status||'offen';
-    const col=st==='ok'?'#00cc66':st==='abweichung'?'#ffaa00':'#3a4560';
-    const icon=st==='ok'?'OK':st==='abweichung'?'ABW':'?';
-    const item=document.createElement('div');item.className='ab-item'+(abCurPos===pos?' active':'');
-    item.innerHTML='<span style="color:'+col+';font-size:11px;font-weight:700">'+icon+'</span><div style="flex:1"><div style="font-size:11px;color:#dce8ff;font-weight:600">Pos. '+esc(pos)+'</div><div style="font-size:10px;color:var(--muted)">Soll: '+getSoll(bars)+'</div></div>'+(e.ist!==undefined?'<span style="font-size:11px;color:'+col+';font-weight:700">'+e.ist+'</span>':'');
-    item.addEventListener('click',()=>openAbPos(pos,bars));
-    item.addEventListener('touchend',e2=>{e2.preventDefault();openAbPos(pos,bars);},{passive:false});
-    list.appendChild(item);
+  return protoAttrKeys;
+}
+
+// Werte fürs Protokoll: Einzelwert (bzw. Wertliste) oder Summe über die Auswahl
+function ppAttrData(pp){
+  const bars=ppBars(pp),out=[];
+  for(const k of [...(pp.attrKeys||protoKeys())]){
+    if(protoAttrSum.has(k)){
+      let t=0,any=false;
+      bars.forEach(b=>{const v=parseFloat(b.props[k]);if(!isNaN(v)){t+=v;any=true;}});
+      if(any)out.push(['Σ '+k,fmtVal(k,t)]);
+    } else {
+      const vals=new Set();
+      bars.forEach(b=>{const v=b.props[k];if(v!==undefined&&v!=='')vals.add(String(v));});
+      if(vals.size===1)out.push([k,fmtVal(k,[...vals][0])]);
+      else if(vals.size>1){
+        const l=[...vals].slice(0,4).map(v=>fmtVal(k,v)).join(', ');
+        out.push([k,l+(vals.size>4?' … ('+vals.size+' Werte)':'')]);
+      }
+    }
+  }
+  return out;
+}
+
+// ── Kameraansicht sichern/wiederherstellen ──────────────────────────────────
+function ppView(){
+  if(!oc)return null;
+  return{x:oc.target.x,y:oc.target.y,z:oc.target.z,r:oc.sph.radius,th:oc.sph.theta,ph:oc.sph.phi};
+}
+function ppSetView(v){
+  if(!oc||!v)return;
+  oc.target.set(v.x,v.y,v.z);
+  oc.sph.radius=v.r;oc.sph.theta=v.th;oc.sph.phi=v.ph;
+  oc._dt=0;oc._dp=0;oc._pan.set(0,0,0);
+  oc.sync();
+}
+
+// ── Modellbild rendern ──────────────────────────────────────────────────────
+// Der Renderer läuft ohne preserveDrawingBuffer in einer Endlosschleife; ein
+// toDataURL() aus einem Klick-Handler liefert deshalb ein leeres Bild. Lösung:
+// unmittelbar davor synchron rendern und im selben Turn auslesen.
+function ppCapture(pp){
+  if(!renderer||!scene||!camera||!meshes.length)return null;
+  const set=new Set(pp.ids);
+  const prev=meshes.map(m=>({m,v:m.visible,o:m.material.opacity,t:m.material.transparent,
+    c:m.material.color.getHex(),e:m.material.emissive.getHex(),i:m.material.emissiveIntensity}));
+  meshes.forEach(m=>{
+    if(set.has(m.userData.id)){
+      m.visible=true;m.material.transparent=false;m.material.opacity=1;
+      m.material.color.copy(MARK_COL);m.material.emissive.set(0xff2200);m.material.emissiveIntensity=.45;
+    } else {
+      m.visible=true;m.material.transparent=true;m.material.opacity=.06;
+      m.material.color.set(gc(m.userData.grp));m.material.emissive.set(0);m.material.emissiveIntensity=0;
+    }
   });
-  updateAbProtokoll();
+  const ringVis=snapIndicatorRing&&snapIndicatorRing.visible;
+  if(ringVis)snapIndicatorRing.visible=false;
+  renderer.render(scene,camera);
+  const src=renderer.domElement;
+  const c=document.createElement('canvas');
+  c.width=src.width;c.height=src.height;
+  const ctx=c.getContext('2d');
+  ctx.drawImage(src,0,0);
+  prev.forEach(p=>{
+    p.m.visible=p.v;p.m.material.opacity=p.o;p.m.material.transparent=p.t;
+    p.m.material.color.setHex(p.c);p.m.material.emissive.setHex(p.e);p.m.material.emissiveIntensity=p.i;
+  });
+  if(ringVis)snapIndicatorRing.visible=true;
+  pp.bildW=c.width;pp.bildH=c.height;
+  return c.toDataURL('image/png');
 }
 
-function openAbPos(pos,bars){
-  abCurPos=pos;
-  document.getElementById('abEmpty').style.display='none';
-  document.getElementById('abForm').style.display='block';
-  document.getElementById('abTitle').textContent='Pos. '+pos;
-  document.getElementById('abSub').textContent=bars.length+' Mesh - '+new Date().toLocaleString('de-DE');
-  const soll=getSoll(bars);document.getElementById('abSoll').textContent=soll;
-  const saved=protokoll[pos]||{};
-  document.getElementById('abIst').value=saved.ist!==undefined?saved.ist:'';
-  document.getElementById('abKomm').value=saved.kommentar||'';
-  const fp=document.getElementById('abFotoImg'),fn=document.getElementById('abFotoName');
-  if(saved.fotoUrl){fp.src=saved.fotoUrl;fp.style.display='block';fn.textContent=saved.fotoName||'';}
-  else{fp.style.display='none';fn.textContent='';}
-  const attrK=['Stabdurchmesser','NominalDiameter','BarLength','Masse','Materialguete','LAYER','BarDistance','Shape code','Werkstoff','BarCount'];
-  const merged={};for(const bar of bars)for(const k of attrK)if(bar.props[k])merged[k]=bar.props[k];
-  let ah='';for(const [k,v] of Object.entries(merged))ah+='<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(fmtVal(k,v))+'</span></div>';
-  document.getElementById('abAttrs').innerHTML=ah||'<div style="color:var(--muted);font-size:10px">-</div>';
-  updateAbDelta();setAbBadge(saved.status||'offen');buildAbList();
+// Die Beschriftung trägt Nummer und Bezeichnung – beides steht beim Anlegen noch
+// nicht fest. Sie wird deshalb nicht ins gespeicherte Bild gebrannt, sondern erst
+// beim Export erzeugt. So bleibt sie immer aktuell und es liegt nur eine Fassung
+// des Bildes im Speicher.
+function ppStamped(pp){
+  return new Promise(res=>{
+    if(!pp.bildRaw)return res(null);
+    const img=new Image();
+    img.onload=()=>{
+      const c=document.createElement('canvas');
+      c.width=img.naturalWidth;c.height=img.naturalHeight;
+      const ctx=c.getContext('2d');
+      ctx.drawImage(img,0,0);
+      ppStamp(ctx,c,pp);
+      res(c.toDataURL('image/png'));
+    };
+    img.onerror=()=>res(pp.bildRaw);
+    img.src=pp.bildRaw;
+  });
 }
 
-function updateAbDelta(){
-  const soll=parseInt(document.getElementById('abSoll').textContent);
-  const ist=parseInt(document.getElementById('abIst').value);
-  const el=document.getElementById('abDelta');
-  if(isNaN(ist)){el.style.display='none';return;}
-  el.style.display='block';const diff=ist-soll;
-  if(diff===0){el.style.background='#0a2010';el.style.border='1px solid #00cc66';el.style.color='#00cc66';el.textContent='OK - Anzahl stimmt';}
-  else{el.style.background='#1a1000';el.style.border='1px solid #ffaa00';el.style.color='#ffaa00';el.textContent='Diff: '+(diff>0?'+':'')+diff+' Staebe';}
+// Kamera auf die Auswahl einpassen, damit das Bild die geprüften Stäbe zeigt
+function ppFrame(ids){
+  if(!oc||!meshes.length)return;
+  const set=new Set(ids);
+  const box=new THREE.Box3();
+  meshes.filter(m=>set.has(m.userData.id)).forEach(m=>box.expandByObject(m));
+  if(!box.isEmpty())oc.fitTo(box);
 }
 
-document.getElementById('abIst').addEventListener('input',()=>{
-  if(!abCurPos)return;if(!protokoll[abCurPos])protokoll[abCurPos]={};
-  const v=parseInt(document.getElementById('abIst').value);
-  protokoll[abCurPos].ist=isNaN(v)?undefined:v;
-  protokoll[abCurPos].zeit=new Date().toLocaleString('de-DE');
-  updateAbDelta();
-});
-document.getElementById('abKomm').addEventListener('input',()=>{
-  if(!abCurPos)return;if(!protokoll[abCurPos])protokoll[abCurPos]={};
-  protokoll[abCurPos].kommentar=document.getElementById('abKomm').value;
-});
-document.getElementById('abFotoBtn').addEventListener('click',()=>document.getElementById('abFoto').click());
-document.getElementById('abFoto').addEventListener('change',e=>{
-  const file=e.target.files[0];if(!file||!abCurPos)return;
-  document.getElementById('abFotoName').textContent=file.name;
-  const reader=new FileReader();
-  reader.onload=r=>{
-    if(!protokoll[abCurPos])protokoll[abCurPos]={};
-    protokoll[abCurPos].fotoUrl=r.target.result;protokoll[abCurPos].fotoName=file.name;
-    document.getElementById('abFotoImg').src=r.target.result;
-    document.getElementById('abFotoImg').style.display='block';
+// Beschriftung, damit das Bild auch ohne Protokoll-Kontext lesbar bleibt
+function ppStamp(ctx,c,pp){
+  const W=c.width,H=c.height,s=W/1200;
+  ctx.textBaseline='middle';
+  const bh=Math.round(62*s);
+  ctx.fillStyle='rgba(8,10,15,.9)';ctx.fillRect(0,0,W,bh);
+  ctx.fillStyle='#00c8ff';ctx.font='700 '+Math.round(30*s)+'px Arial,sans-serif';
+  const nr='P'+pad2(pp.nr);
+  ctx.fillText(nr,Math.round(16*s),bh/2);
+  const nw=ctx.measureText(nr).width;
+  ctx.fillStyle='#ffffff';ctx.font='700 '+Math.round(25*s)+'px Arial,sans-serif';
+  ctx.fillText((pp.titel||'(ohne Bezeichnung)').slice(0,52),Math.round(30*s)+nw,bh/2);
+  const fh=Math.round(40*s);
+  ctx.fillStyle='rgba(8,10,15,.9)';ctx.fillRect(0,H-fh,W,fh);
+  ctx.fillStyle='#b8c4d8';ctx.font=Math.round(18*s)+'px Arial,sans-serif';
+  const pos=ppPosLabel(pp);
+  const foot='Pos.: '+((pos.length>44?pos.slice(0,42)+'…':pos)||'–')
+    +'   ·   '+pp.ids.length+' Stäbe'
+    +(HD.bv?'   ·   '+HD.bv.slice(0,30):'')
+    +'   ·   '+(pp.zeit||'');
+  ctx.fillText(foot,Math.round(16*s),H-fh/2);
+}
+
+// ── Prüfpunkt anlegen ───────────────────────────────────────────────────────
+function ppNew(){
+  if(!marked.size){toast('Keine Stäbe markiert','warn');return;}
+  const ids=[...marked],idSet=new Set(ids);
+  ppSeq++;
+  const pp={
+    nr:ppSeq,titel:'',ids,
+    guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
+    view:null,bildRaw:null,bildW:0,bildH:0,attrKeys:null,
+    kriterien:kritTpl.map(t=>({text:t,status:''})),
+    ist:undefined,kommentar:'',foto:null,fotoName:'',fotoW:0,fotoH:0,
+    zaehlung:null,zeit:new Date().toLocaleString('de-DE')
   };
-  reader.readAsDataURL(file);
-});
-
-function setAbStatus(s){
-  if(!abCurPos)return;
-  if(!protokoll[abCurPos])protokoll[abCurPos]={};
-  const e=protokoll[abCurPos];
-  e.status=s;e.pos=abCurPos;e.soll=parseInt(document.getElementById('abSoll').textContent);e.zeit=new Date().toLocaleString('de-DE');
-  setAbBadge(s);buildAbList();updateAbProtokoll();
-  toast(s==='ok'?'Bestanden':s==='abweichung'?'Abweichung':'Offen');
-}
-function setAbBadge(s){
-  const b=document.getElementById('abBadge');
-  if(s==='ok'){b.style.borderColor='#00cc66';b.style.color='#00cc66';b.style.background='#0a2010';b.textContent='BESTANDEN';}
-  else if(s==='abweichung'){b.style.borderColor='#ffaa00';b.style.color='#ffaa00';b.style.background='#1a1000';b.textContent='ABWEICHUNG';}
-  else{b.style.borderColor='var(--border)';b.style.color='var(--muted)';b.style.background='transparent';b.textContent='OFFEN';}
-}
-document.getElementById('abOk').addEventListener('click',()=>setAbStatus('ok'));
-document.getElementById('abAbw').addEventListener('click',()=>setAbStatus('abweichung'));
-document.getElementById('abOff').addEventListener('click',()=>setAbStatus('offen'));
-['abOk','abAbw','abOff','abFotoBtn'].forEach(id=>{
-  const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
-});
-
-function updateAbProtokoll(){
-  const entries=Object.values(protokoll).filter(e=>e.status&&e.status!=='offen');
-  const p=document.getElementById('abProtokoll');
-  if(!entries.length){p.innerHTML='<div style="color:var(--muted);font-size:10px;padding:8px">Keine Eintraege</div>';return;}
-  p.innerHTML=entries.sort((a,b)=>(a.pos||'').localeCompare(b.pos||'')).map(e=>{
-    const col=e.status==='ok'?'#00cc66':'#ffaa00';
-    const dmOk=e.istDm!==undefined&&e.sollDm!==undefined&&e.istDm===e.sollDm;
-    const dmAbw=e.istDm!==undefined&&e.sollDm!==undefined&&e.istDm!==e.sollDm;
-    const dmLine=e.istDm!==undefined
-      ?'Ø Soll:'+( e.sollDm!==undefined?e.sollDm+'mm':'–')+' Ist:'+e.istDm+'mm'+(dmAbw?' ⚠':'')
-      :(e.sollDm!==undefined?'Ø Soll:'+e.sollDm+'mm':'');
-    return '<div style="padding:7px 5px;border-bottom:1px solid var(--border);font-size:10px">'
-      +'<div style="display:flex;justify-content:space-between"><span style="color:#dce8ff;font-weight:700">Pos. '+esc(e.pos)+'</span><span style="color:'+col+'">'+(e.status==='ok'?'OK':'ABW')+'</span></div>'
-      +'<div style="color:var(--muted)">Stk: Soll '+(e.soll||'-')+' · Ist '+(e.ist!==undefined?e.ist:'-')+'</div>'
-      +(dmLine?'<div style="color:'+(dmAbw?'#ff4466':dmOk?'#00cc66':'var(--muted)')+'">'+dmLine+'</div>':'')
-      +(e.kommentar?'<div style="color:var(--muted);font-style:italic">"'+esc(e.kommentar.slice(0,35))+(e.kommentar.length>35?'...':'')+'"</div>':'')
-      +'<div style="color:#2a3550">'+(e.zeit||'')+'</div></div>';
-  }).join('');
+  // Beim Anlegen wird auf die Auswahl eingepasst, damit das Bild sie formatfüllend
+  // zeigt. „⟳ Neu aufnehmen“ übernimmt dagegen die aktuelle Ansicht unverändert.
+  ppFrame(ids);
+  pp.view=ppView();
+  pp.bildRaw=ppCapture(pp);
+  PP.push(pp);
+  ppClearMarks();
+  ppOpen(pp);
+  toast('Prüfpunkt P'+pp.nr+' angelegt · Tab „Abnahme"');
 }
 
-document.getElementById('abCSV').addEventListener('click',async()=>{
-  const gs=abGrps(marked.size>0);const keys=Object.keys(gs).sort();
-  const rows=[['Position','Soll Anzahl','Ist Anzahl','Diff Anzahl','Soll Ø mm','Ist Ø mm','Diff Ø mm','Status','Kommentar','Foto','Uhrzeit']];
-  keys.forEach(pos=>{
-    const e=protokoll[pos]||{};const soll=getSoll(gs[pos]);
-    const ist=e.ist!==undefined?e.ist:'';
-    const diff=ist!==''?ist-soll:'';
-    const sollDm=e.sollDm!==undefined?e.sollDm:'';
-    const istDm=e.istDm!==undefined?e.istDm:'';
-    const diffDm=istDm!==''&&sollDm!==''?istDm-sollDm:'';
-    const fotoRef=e.fotoUrl?'Fotos/Pos_'+pos+'.'+(e.fotoUrl.match(/image\/(\w+)/)?.[1]||'jpg').replace('jpeg','jpg'):'';
-    rows.push([pos,soll,ist,diff,sollDm,istDm,diffDm,e.status||'offen',e.kommentar||'',fotoRef,e.zeit||'']);
+// Markierung zurücksetzen, Gruppenfilter des Viewers aber beibehalten
+function ppClearMarks(){
+  isolateMode=false;markedHidden=false;
+  const g=id=>document.getElementById(id);
+  if(g('mpIso'))g('mpIso').style.display='';
+  if(g('mpIsoOff'))g('mpIsoOff').style.display='none';
+  if(g('mpHide'))g('mpHide').style.display='flex';
+  if(g('mpShow'))g('mpShow').style.display='none';
+  marked.clear();
+  meshes.forEach(m=>{
+    m.userData.marked=false;
+    m.material.color.set(gc(m.userData.grp));
+    m.material.emissive.set(0);m.material.emissiveIntensity=0;
   });
-  const csv='﻿'+rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
-  const hasPhotos=keys.some(pos=>protokoll[pos]?.fotoUrl);
-  const datum=new Date().toISOString().slice(0,10);
-  if(hasPhotos&&window.JSZip){
-    const zip=new JSZip();
-    zip.file('Abnahme.csv',csv);
-    const fd=zip.folder('Fotos');
-    keys.forEach(pos=>{
-      const e=protokoll[pos]||{};if(!e.fotoUrl)return;
-      const m=e.fotoUrl.match(/^data:image\/(\w+);base64,(.+)$/);
-      if(m){const ext=m[1]==='jpeg'?'jpg':m[1];fd.file('Pos_'+pos+'.'+ext,m[2],{base64:true});}
+  applyGroupFilter();
+  updateMP();
+}
+
+// ── Liste links ─────────────────────────────────────────────────────────────
+function ppStatus(pp){
+  const k=pp.kriterien||[];
+  const nio=k.filter(x=>x.status==='nio').length;
+  const off=k.filter(x=>!x.status).length;
+  const ges=k.filter(x=>x.status).length;
+  if(nio)return{col:'var(--err)',txt:'n.i.O. ('+nio+')',key:'nio'};
+  if(k.length&&off===0)return{col:'var(--ok)',txt:'i.O.',key:'io'};
+  if(ges||pp.ist!==undefined)return{col:'var(--warn)',txt:'in Arbeit',key:'wip'};
+  return{col:'var(--muted)',txt:pp.ids.length+' Stäbe',key:'off'};
+}
+
+function ppRenderList(){
+  const l=document.getElementById('ppList');if(!l)return;
+  l.innerHTML='';
+  if(!PP.length){
+    l.innerHTML='<div style="padding:14px 12px;color:var(--muted);font-size:15px;line-height:1.7">'
+      +'Noch keine Prüfpunkte.<br>Im <b>3D Viewer</b> Stäbe markieren und dort<br>„＋ Prüfpunkt" tippen.</div>';
+  }
+  let io=0,nio=0,off=0;
+  PP.forEach(pp=>{
+    const st=ppStatus(pp);
+    if(st.key==='io')io++;else if(st.key==='nio')nio++;else off++;
+    const it=document.createElement('div');
+    it.className='pp-item'+(ppCur===pp?' active':'');
+    it.innerHTML='<span class="pp-nr">P'+pp.nr+'</span>'
+      +(pp.bildRaw?'<img class="pp-thumb" src="'+pp.bildRaw+'" alt="">':'<div class="pp-thumb"></div>')
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:15px;color:#dce8ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(pp.titel||'(ohne Bezeichnung)')+'</div>'
+      +'<div style="font-size:13.5px;color:'+st.col+'">'+esc(st.txt)+'</div></div>';
+    it.addEventListener('click',()=>ppOpen(pp));
+    it.addEventListener('touchend',e=>{e.preventDefault();ppOpen(pp);},{passive:false});
+    l.appendChild(it);
+  });
+  document.getElementById('ppProg').textContent=PP.length?PP.length+' Prüfpunkte':'–';
+  document.getElementById('ppOkCnt').textContent='i.O. '+io;
+  document.getElementById('ppNioCnt').textContent='n.i.O. '+nio;
+  document.getElementById('ppOffCnt').textContent='offen '+off;
+}
+
+// ── Detailansicht ───────────────────────────────────────────────────────────
+function ppOpen(pp){
+  ppCur=pp;
+  document.getElementById('ppEmpty').style.display='none';
+  document.getElementById('ppForm').style.display='block';
+  document.getElementById('ppNr').textContent='P'+pp.nr;
+  document.getElementById('ppTitel').value=pp.titel||'';
+  document.getElementById('ppSub').textContent=
+    pp.ids.length+' Stäbe · Pos. '+(ppPosLabel(pp)||'–')+' · angelegt '+pp.zeit;
+  const img=document.getElementById('ppBild');
+  if(pp.bildRaw){img.src=pp.bildRaw;img.style.display='block';}else img.style.display='none';
+  document.getElementById('ppSoll').textContent=sollStk(ppBars(pp));
+  document.getElementById('ppBarCnt').textContent=barCountAttr(ppBars(pp));
+  document.getElementById('ppIst').value=pp.ist!==undefined?pp.ist:'';
+  document.getElementById('ppKomm').value=pp.kommentar||'';
+  const fi=document.getElementById('ppFotoImg');
+  if(pp.foto){fi.src=pp.foto;fi.style.display='block';document.getElementById('ppFotoName').textContent=pp.fotoName||'';}
+  else{fi.style.display='none';document.getElementById('ppFotoName').textContent='';}
+  document.getElementById('ppAttrScope').textContent=pp.attrKeys?'eigene Auswahl':'Vorgabe';
+  ppRenderAttrs();ppRenderKrit();ppDelta();ppRenderList();
+}
+
+function ppRenderAttrs(){
+  const c=document.getElementById('ppAttrs');if(!c||!ppCur)return;
+  const d=ppAttrData(ppCur);
+  c.innerHTML=d.length
+    ?d.map(([k,v])=>'<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(v)+'</span></div>').join('')
+    :'<div style="color:var(--muted);font-size:15px">Keine Attribute gewählt – „⚙ Auswahl"</div>';
+}
+
+function ppDelta(){
+  const el=document.getElementById('ppDelta');if(!el||!ppCur)return;
+  if(ppCur.ist===undefined){el.style.display='none';return;}
+  const soll=sollStk(ppBars(ppCur)),diff=ppCur.ist-soll;
+  el.style.display='block';
+  if(diff===0){el.style.background='#0a2010';el.style.border='1px solid #00cc66';el.style.color='#00cc66';el.textContent='✓ Anzahl stimmt';}
+  else{el.style.background='#1a1000';el.style.border='1px solid #ffaa00';el.style.color='#ffaa00';el.textContent='Differenz: '+(diff>0?'+':'')+diff+' Stäbe';}
+}
+
+function ppRenderKrit(){
+  const c=document.getElementById('ppKrit');if(!c)return;
+  c.innerHTML='';
+  const pp=ppCur;if(!pp)return;
+  if(!pp.kriterien.length){
+    c.innerHTML='<div style="color:var(--muted);font-size:15px;padding:7px 0;line-height:1.6">'
+      +'Noch keine Kriterien.<br>„＋ Zeile" hier, oder rechts eine Vorlage anlegen und „↺ Vorlage" drücken.</div>';
+    return;
+  }
+  pp.kriterien.forEach((k,i)=>{
+    const row=document.createElement('div');row.className='krit-row';
+    row.innerHTML='<input class="krit-txt" value="'+esc(k.text)+'" placeholder="Kriterium…">'
+      +'<button class="kb'+(k.status==='io'?' on-io':'')+'" data-s="io" title="in Ordnung">✓</button>'
+      +'<button class="kb'+(k.status==='nio'?' on-nio':'')+'" data-s="nio" title="nicht in Ordnung">✗</button>'
+      +'<button class="kb'+(k.status==='nz'?' on-nz':'')+'" data-s="nz" title="nicht zutreffend">–</button>'
+      +'<button class="btn btn-d" data-del="1" style="width:28px;padding:3px 0;font-size:13.5px" title="Zeile löschen">✕</button>';
+    row.querySelector('.krit-txt').addEventListener('input',e=>{k.text=e.target.value;});
+    row.querySelectorAll('.kb').forEach(b=>{
+      const set=()=>{k.status=(k.status===b.dataset.s)?'':b.dataset.s;ppRenderKrit();ppRenderList();};
+      b.addEventListener('click',set);
+      b.addEventListener('touchend',e=>{e.preventDefault();set();},{passive:false});
     });
-    const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);
-    a.download='Abnahme_'+datum+'.zip';a.click();toast('ZIP exportiert (CSV + Fotos)');
-  } else {
-    const a=document.createElement('a');
-    a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
-    a.download='Abnahme_'+datum+'.csv';a.click();toast('CSV exportiert');
+    const db=row.querySelector('[data-del]');
+    const del=()=>{pp.kriterien.splice(i,1);ppRenderKrit();ppRenderList();};
+    db.addEventListener('click',del);
+    db.addEventListener('touchend',e=>{e.preventDefault();del();},{passive:false});
+    c.appendChild(row);
+  });
+}
+
+// ── Kriterien-Vorlage (rechte Spalte, im Browser gespeichert) ───────────────
+function tplRender(){
+  const c=document.getElementById('tplList');if(!c)return;
+  c.innerHTML='';
+  if(!kritTpl.length){
+    c.innerHTML='<div style="color:var(--muted);font-size:13.5px;line-height:1.6">Keine Vorlage. Mit „＋" Kriterien anlegen – sie gelten dann für neue Prüfpunkte.</div>';
+    return;
+  }
+  kritTpl.forEach((t,i)=>{
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;gap:5px;align-items:center;margin-bottom:4px';
+    row.innerHTML='<input class="hd-inp" value="'+esc(t)+'" style="margin:0" placeholder="Kriterium…">'
+      +'<button class="btn btn-d" style="padding:3px 7px;font-size:13.5px;flex-shrink:0">✕</button>';
+    row.querySelector('input').addEventListener('input',e=>{kritTpl[i]=e.target.value;ppSaveSettings();});
+    row.querySelector('button').addEventListener('click',()=>{kritTpl.splice(i,1);tplRender();ppSaveSettings();});
+    c.appendChild(row);
+  });
+}
+
+function ppSaveSettings(){
+  try{localStorage.setItem('jxp_pp_cfg',JSON.stringify({HD,kritTpl}));}catch(e){}
+}
+function ppLoadSettings(){
+  try{
+    const s=JSON.parse(localStorage.getItem('jxp_pp_cfg')||'{}');
+    if(s.HD)Object.assign(HD,s.HD);
+    if(Array.isArray(s.kritTpl))kritTpl=s.kritTpl;
+  }catch(e){}
+  for(const k of Object.keys(HD)){
+    const el=document.querySelector('[data-hd="'+k+'"]');
+    if(el)el.value=HD[k]||'';
+  }
+  tplRender();
+}
+
+// ── Attribut-Auswahl (Modal) ────────────────────────────────────────────────
+let ppAttrTargetOwn=false;
+function ppAttrModalOpen(){
+  if(!ppCur)return;
+  ppAttrTargetOwn=!!ppCur.attrKeys;
+  ppAttrModalRender();
+  document.getElementById('ppAttrModal').style.display='block';
+}
+function ppAttrActiveSet(){
+  if(ppAttrTargetOwn){
+    if(!ppCur.attrKeys)ppCur.attrKeys=new Set(protoKeys());
+    return ppCur.attrKeys;
+  }
+  return protoKeys();
+}
+function ppAttrModalRender(){
+  const box=document.getElementById('ppAttrListBox');
+  const sel=ppAttrActiveSet();
+  const keys=infoAllKeys.length?infoAllKeys:[...new Set(BARS.flatMap(b=>Object.keys(b.props)))].sort();
+  box.innerHTML='';
+  for(const k of keys){
+    const numeric=BARS.some(b=>!isNaN(parseFloat(b.props[k])));
+    const row=document.createElement('div');
+    row.style.cssText='display:flex;align-items:center;gap:8px;padding:5px 2px;border-bottom:1px solid #121824';
+    row.innerHTML='<input type="checkbox" '+(sel.has(k)?'checked':'')+' style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">'
+      +'<span style="flex:1;font-size:15px;color:'+(sel.has(k)?'#dce8ff':'var(--muted)')+'">'+esc(k)+'</span>'
+      +(numeric?'<button class="kb'+(protoAttrSum.has(k)?' on-io':'')+'" style="width:32px;height:27px;font-size:14px" title="über die Auswahl summieren">Σ</button>':'');
+    row.querySelector('input').addEventListener('change',e=>{
+      if(e.target.checked)sel.add(k);else sel.delete(k);
+      row.querySelector('span').style.color=e.target.checked?'#dce8ff':'var(--muted)';
+    });
+    const sb=row.querySelector('button');
+    if(sb)sb.addEventListener('click',()=>{
+      if(protoAttrSum.has(k))protoAttrSum.delete(k);else protoAttrSum.add(k);
+      sb.classList.toggle('on-io',protoAttrSum.has(k));
+    });
+    box.appendChild(row);
+  }
+  document.getElementById('ppAttrScopeTgl').textContent=
+    ppAttrTargetOwn?'✓ Nur für diesen Prüfpunkt':'Nur für diesen Prüfpunkt';
+  document.getElementById('ppAttrScopeTgl').style.borderColor=ppAttrTargetOwn?'var(--accent)':'';
+  document.getElementById('ppAttrScopeTgl').style.color=ppAttrTargetOwn?'var(--accent)':'';
+}
+
+// ── PDF je Prüfpunkt ────────────────────────────────────────────────────────
+function pdfBox(d,x,y,s,checked,mark){
+  d.setDrawColor(90);d.setLineWidth(.3);d.rect(x,y,s,s);
+  if(!checked)return;
+  d.setLineWidth(.65);
+  if(mark==='x'){d.setDrawColor(190,40,40);d.line(x+.9,y+.9,x+s-.9,y+s-.9);d.line(x+s-.9,y+.9,x+.9,y+s-.9);}
+  else{d.setDrawColor(0,130,60);d.line(x+.8,y+s*.55,x+s*.42,y+s-1);d.line(x+s*.42,y+s-1,x+s-.8,y+s*.2);}
+  d.setDrawColor(90);d.setLineWidth(.3);
+}
+function fotoFmt(u){return /^data:image\/png/i.test(u)?'PNG':'JPEG';}
+
+// Die jsPDF-Standardschriften kennen nur Latin-1. Alles darüber wird sonst
+// stillschweigend verschluckt (Gedankenstrich: „A–F / 1–12" wurde zu „AF / 112")
+// oder zerstört die Kodierung der Folgezeichen („Σ Masse" wurde zu „£ M a s s e").
+// Darum vor jeder Textausgabe auf darstellbare Zeichen abbilden.
+const PDF_MAP={'–':'-','—':'-','−':'-','‐':'-','‑':'-',
+  '‘':"'",'’':"'",'‚':',','‛':"'",
+  '“':'"','”':'"','„':'"','‟':'"',
+  '…':'...','•':'-',' ':' ',' ':' ',' ':' ',
+  'Σ':'Summe','≤':'<=','≥':'>=','≠':'!=',
+  '✓':'x','✗':'x','²':'2','³':'3','€':'EUR'};
+function pdfTxt(s){
+  return String(s==null?'':s).replace(/[^\x00-\xFF]/g,c=>PDF_MAP[c]!==undefined?PDF_MAP[c]:'?');
+}
+
+async function ppPDF(pp){
+  const J=window.jspdf&&window.jspdf.jsPDF;
+  if(!J){toast('PDF-Bibliothek nicht geladen','err');return null;}
+  const bild=await ppStamped(pp);
+  const voll=document.getElementById('ppBoxMode').value==='voll';
+  // compress:true ist wesentlich: ohne die Option legt jsPDF das Modellbild als
+  // rohes RGB ab (~3,7 MB je Prüfpunkt statt ~150 kB) – zu schwer als Dalux-Anhang.
+  const d=new J({unit:'mm',format:'a4',compress:true});
+  // Zentral filtern, damit keine Ausgabestelle vergessen werden kann
+  const _text=d.text.bind(d);
+  d.text=(t,x,y,o)=>_text(Array.isArray(t)?t.map(pdfTxt):pdfTxt(t),x,y,o);
+  const L=15,R=195,W=R-L,BOT=276;
+  let y=16;
+  const need=h=>{if(y+h>BOT){d.addPage();y=18;}};
+
+  d.setFont('helvetica','bold');d.setFontSize(15);d.setTextColor(20);
+  d.text('Bewehrungsabnahme – Prüfprotokoll',L,y);y+=6.5;
+  d.setFontSize(11);d.setTextColor(0,120,170);
+  d.text('Prüfpunkt P'+pad2(pp.nr)+(pp.titel?'  ·  '+pp.titel:''),L,y);y+=3;
+  d.setDrawColor(150);d.setLineWidth(.4);d.line(L,y,R,y);y+=6;
+
+  const rows=[['Bauvorhaben',HD.bv],['Bauteil',HD.bt],['Achse / Abschnitt',HD.ac],
+    ['Prüfer',HD.pr],['Firma',HD.fa],['Datum',hdDatum()],
+    ['IFC-Datei',fname],['Positionen',ppPosLabel(pp)]];
+  for(let i=0;i<rows.length;i+=2){
+    for(let cIdx=0;cIdx<2;cIdx++){
+      const r=rows[i+cIdx];if(!r)continue;
+      const x=L+cIdx*(W/2);
+      d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
+      d.text(r[0].toUpperCase(),x,y);
+      d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
+      d.text(String(r[1]||'–').slice(0,44),x,y+4.2);
+    }
+    y+=10;
+  }
+  y+=1;
+
+  if(bild&&pp.bildW){
+    let iw=W,ih=W*pp.bildH/pp.bildW;
+    if(ih>102){ih=102;iw=102*pp.bildW/pp.bildH;}
+    need(ih+7);
+    d.addImage(bild,'PNG',L,y,iw,ih);
+    d.setDrawColor(190);d.setLineWidth(.3);d.rect(L,y,iw,ih);
+    y+=ih+7;
+  }
+
+  const soll=sollStk(ppBars(pp)),diff=pp.ist!==undefined?pp.ist-soll:null;
+  need(14);
+  d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
+  d.text('SOLL (STAB-OBJEKTE)',L,y);d.text('IST (VOR ORT)',L+45,y);d.text('DIFFERENZ',L+80,y);
+  d.text('BARCOUNT LT. IFC',L+114,y);
+  d.setFont('helvetica','bold');d.setFontSize(13);d.setTextColor(20);
+  d.text(String(soll),L,y+6);
+  d.text(pp.ist!==undefined?String(pp.ist):'–',L+45,y+6);
+  if(diff!==null&&diff!==0)d.setTextColor(190,40,40);
+  d.text(diff===null?'–':(diff>0?'+':'')+diff,L+80,y+6);
+  d.setTextColor(20);
+  d.text(barCountAttr(ppBars(pp)),L+114,y+6);
+  y+=13;
+
+  const ad=ppAttrData(pp);
+  if(ad.length){
+    need(12);
+    d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
+    d.text('IFC-Attribute',L,y);y+=1.6;
+    d.setDrawColor(190);d.line(L,y,R,y);y+=4.6;
+    for(const [k,v] of ad){
+      need(6);
+      d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(110);
+      d.text(String(k).slice(0,40),L+1,y);
+      d.setTextColor(20);
+      d.text(String(v).slice(0,58),L+68,y);
+      y+=5.2;
+    }
+    y+=3.5;
+  }
+
+  need(16);
+  d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
+  d.text('Prüfkriterien',L,y);
+  const cx=[R-40,R-26,R-12];
+  d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
+  d.text('i.O.',cx[0],y);d.text('n.i.O.',cx[1]-1.6,y);d.text('n.z.',cx[2],y);
+  y+=1.6;d.setDrawColor(190);d.line(L,y,R,y);y+=5.4;
+  const krit=pp.kriterien||[];
+  if(!krit.length){
+    d.setFontSize(9);d.setTextColor(135);
+    d.text('– keine Kriterien hinterlegt –',L+1,y);y+=6;
+  }
+  for(const k of krit){
+    need(8);
+    d.setFont('helvetica','normal');d.setFontSize(9.5);d.setTextColor(20);
+    d.text(String(k.text||'').slice(0,58),L+1,y);
+    pdfBox(d,cx[0],y-3.3,4.2,voll&&k.status==='io','check');
+    pdfBox(d,cx[1],y-3.3,4.2,voll&&k.status==='nio','x');
+    pdfBox(d,cx[2],y-3.3,4.2,voll&&k.status==='nz','check');
+    d.setDrawColor(228);d.setLineWidth(.2);d.line(L,y+2.4,R,y+2.4);
+    y+=7;
+  }
+  y+=4;
+
+  if(pp.zaehlung&&pp.zaehlung.length){
+    need(14);
+    d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
+    d.text('Stichprobe je Position',L,y);y+=1.6;
+    d.setDrawColor(190);d.setLineWidth(.3);d.line(L,y,R,y);y+=4.6;
+    d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
+    d.text('POSITION',L+1,y);d.text('SOLL STK',L+50,y);d.text('IST STK',L+75,y);
+    d.text('SOLL Ø',L+100,y);d.text('IST Ø',L+125,y);y+=4.6;
+    for(const z of pp.zaehlung){
+      need(6);
+      d.setFontSize(9);d.setTextColor(20);
+      d.text(String(z.pos).slice(0,26),L+1,y);
+      d.text(z.soll!==undefined?String(z.soll):'–',L+50,y);
+      d.text(z.ist!==undefined?String(z.ist):'–',L+75,y);
+      d.text(z.sollDm!==undefined?String(z.sollDm):'–',L+100,y);
+      d.text(z.istDm!==undefined?String(z.istDm):'–',L+125,y);
+      y+=5.2;
+    }
+    y+=4;
+  }
+
+  if(pp.kommentar){
+    const lines=d.splitTextToSize(pp.kommentar,W-2);
+    need(9+lines.length*4.6);
+    d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
+    d.text('Bemerkung',L,y);y+=5;
+    d.setFont('helvetica','normal');d.setFontSize(9.5);d.setTextColor(45);
+    for(const ln of lines){need(5);d.text(ln,L+1,y);y+=4.6;}
+    y+=4;
+  }
+
+  if(pp.foto&&pp.fotoW){
+    let iw=W*.66,ih=iw*pp.fotoH/pp.fotoW;
+    if(ih>88){ih=88;iw=88*pp.fotoW/pp.fotoH;}
+    need(ih+10);
+    d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
+    d.text('Baustellenfoto',L,y);y+=3.5;
+    d.addImage(pp.foto,fotoFmt(pp.foto),L,y,iw,ih);
+    d.setDrawColor(190);d.setLineWidth(.3);d.rect(L,y,iw,ih);
+    y+=ih+7;
+  }
+
+  need(24);
+  y+=10;
+  d.setDrawColor(110);d.setLineWidth(.4);
+  d.line(L,y,L+72,y);d.line(L+96,y,L+168,y);
+  d.setFont('helvetica','normal');d.setFontSize(7.6);d.setTextColor(120);
+  d.text('Datum, Unterschrift Prüfer',L,y+4);
+  d.text('Datum, Unterschrift Bauleitung',L+96,y+4);
+
+  const n=d.internal.getNumberOfPages();
+  for(let p=1;p<=n;p++){
+    d.setPage(p);
+    d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(150);
+    d.text('P'+pad2(pp.nr)+(pp.titel?' · '+pp.titel:'')+'   ·   erzeugt '+new Date().toLocaleString('de-DE'),L,289);
+    d.text('Seite '+p+'/'+n,R-14,289);
+  }
+  return d;
+}
+
+function ppFileBase(pp){
+  const s=slug(pp.titel);
+  return 'P'+pad2(pp.nr)+(s?'_'+s:'');
+}
+
+// ── Exporte ─────────────────────────────────────────────────────────────────
+async function ppExportPDF(pp){
+  const d=await ppPDF(pp);if(!d)return;
+  d.save(ppFileBase(pp)+'.pdf');
+  toast('PDF: '+ppFileBase(pp)+'.pdf');
+}
+async function ppExportPNG(pp){
+  if(!pp.bildRaw){toast('Kein Modellbild vorhanden','warn');return;}
+  const s=await ppStamped(pp);
+  const a=document.createElement('a');
+  a.href=s||pp.bildRaw;a.download=ppFileBase(pp)+'.png';a.click();
+  toast('Screenshot: '+ppFileBase(pp)+'.png');
+}
+
+async function ppExportZip(){
+  if(!PP.length){toast('Keine Prüfpunkte','warn');return;}
+  if(!window.JSZip){toast('JSZip nicht geladen','err');return;}
+  const zip=new JSZip();
+  for(const pp of PP){
+    const base=ppFileBase(pp);
+    const d=await ppPDF(pp);
+    if(d)zip.file(base+'.pdf',d.output('blob'));
+    const s=await ppStamped(pp);
+    if(s){
+      const m=s.match(/^data:image\/png;base64,(.+)$/);
+      if(m)zip.file(base+'.png',m[1],{base64:true});
+    }
+    if(pp.foto){
+      const m=pp.foto.match(/^data:image\/(\w+);base64,(.+)$/);
+      if(m)zip.file(base+'_Foto.'+(m[1]==='jpeg'?'jpg':m[1]),m[2],{base64:true});
+    }
+  }
+  zip.file('Pruefpunkte.csv',ppCSV());
+  const blob=await zip.generateAsync({type:'blob',compression:'DEFLATE',compressionOptions:{level:6}});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='Abnahme_'+(slug(HD.bt)||'Pruefpunkte')+'_'+new Date().toISOString().slice(0,10)+'.zip';
+  a.click();
+  toast(PP.length+' Prüfpunkte als ZIP exportiert');
+}
+
+function ppCSV(){
+  const kritCols=[];
+  PP.forEach(pp=>(pp.kriterien||[]).forEach(k=>{if(k.text&&!kritCols.includes(k.text))kritCols.push(k.text);}));
+  const head=['Prüfpunkt','Bezeichnung','Positionen','Stäbe','Soll','Ist','Differenz','Kommentar','Angelegt',...kritCols];
+  const lines=[head];
+  PP.forEach(pp=>{
+    const soll=sollStk(ppBars(pp));
+    const map={};(pp.kriterien||[]).forEach(k=>{map[k.text]=k.status==='io'?'i.O.':k.status==='nio'?'n.i.O.':k.status==='nz'?'n.z.':'';});
+    lines.push(['P'+pad2(pp.nr),pp.titel||'',ppPosLabel(pp),pp.ids.length,soll,
+      pp.ist!==undefined?pp.ist:'',pp.ist!==undefined?pp.ist-soll:'',
+      pp.kommentar||'',pp.zeit,...kritCols.map(c=>map[c]||'')]);
+  });
+  return '﻿'+lines.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(';')).join('\n');
+}
+
+// ── Ereignisse ──────────────────────────────────────────────────────────────
+document.getElementById('mpPP').addEventListener('click',ppNew);
+document.getElementById('ppTitel').addEventListener('input',e=>{
+  if(!ppCur)return;
+  ppCur.titel=e.target.value;
+  ppRenderList();
+});
+document.getElementById('ppIst').addEventListener('input',e=>{
+  if(!ppCur)return;
+  const v=parseInt(e.target.value);
+  ppCur.ist=isNaN(v)?undefined:v;
+  ppDelta();ppRenderList();
+});
+document.getElementById('ppKomm').addEventListener('input',e=>{if(ppCur)ppCur.kommentar=e.target.value;});
+document.getElementById('ppDel').addEventListener('click',()=>{
+  if(!ppCur)return;
+  const i=PP.indexOf(ppCur);if(i<0)return;
+  PP.splice(i,1);
+  ppCur=PP[Math.min(i,PP.length-1)]||null;
+  if(ppCur)ppOpen(ppCur);
+  else{document.getElementById('ppForm').style.display='none';document.getElementById('ppEmpty').style.display='flex';ppRenderList();}
+  toast('Prüfpunkt gelöscht');
+});
+document.getElementById('ppViewGo').addEventListener('click',()=>{
+  if(!ppCur)return;
+  switchTab('viewer');
+  ppSetView(ppCur.view);
+  const set=new Set(ppCur.ids);
+  marked.clear();
+  meshes.forEach(m=>{
+    if(set.has(m.userData.id)){
+      marked.add(m.userData.id);m.userData.marked=true;
+      m.material.color.copy(MARK_COL);m.material.emissive.set(0xff2200);m.material.emissiveIntensity=.4;
+    } else {
+      m.userData.marked=false;m.material.color.set(gc(m.userData.grp));
+      m.material.emissive.set(0);m.material.emissiveIntensity=0;
+    }
+  });
+  updateMP();
+  toast('Ansicht P'+ppCur.nr+' wiederhergestellt');
+});
+document.getElementById('ppShot').addEventListener('click',()=>{
+  if(!ppCur)return;
+  if(!meshes.length){toast('Kein Modell geladen','warn');return;}
+  ppCur.view=ppView();
+  const b=ppCapture(ppCur);
+  if(!b){toast('Aufnahme fehlgeschlagen','err');return;}
+  ppCur.bildRaw=b;
+  document.getElementById('ppBild').src=b;
+  document.getElementById('ppBild').style.display='block';
+  ppRenderList();
+  toast('Bild neu aufgenommen');
+});
+document.getElementById('ppKritAdd').addEventListener('click',()=>{
+  if(!ppCur)return;
+  ppCur.kriterien.push({text:'',status:''});
+  ppRenderKrit();
+  const inps=document.querySelectorAll('#ppKrit .krit-txt');
+  if(inps.length)inps[inps.length-1].focus();
+});
+document.getElementById('ppKritFromTpl').addEventListener('click',()=>{
+  if(!ppCur)return;
+  if(!kritTpl.length){toast('Vorlage ist leer','warn');return;}
+  ppCur.kriterien=kritTpl.map(t=>({text:t,status:''}));
+  ppRenderKrit();ppRenderList();
+  toast('Kriterien aus Vorlage geladen');
+});
+document.getElementById('tplAdd').addEventListener('click',()=>{
+  kritTpl.push('');tplRender();ppSaveSettings();
+  const inps=document.querySelectorAll('#tplList input');
+  if(inps.length)inps[inps.length-1].focus();
+});
+document.querySelectorAll('[data-hd]').forEach(el=>{
+  el.addEventListener('input',()=>{HD[el.dataset.hd]=el.value;ppSaveSettings();});
+});
+document.getElementById('ppFotoBtn').addEventListener('click',()=>document.getElementById('ppFoto').click());
+document.getElementById('ppFoto').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file||!ppCur)return;
+  const pp=ppCur;
+  const r=new FileReader();
+  r.onload=ev=>{
+    const img=new Image();
+    img.onload=()=>{
+      pp.foto=ev.target.result;pp.fotoName=file.name;
+      pp.fotoW=img.naturalWidth;pp.fotoH=img.naturalHeight;
+      if(ppCur===pp){
+        document.getElementById('ppFotoImg').src=pp.foto;
+        document.getElementById('ppFotoImg').style.display='block';
+        document.getElementById('ppFotoName').textContent=file.name;
+      }
+    };
+    img.src=ev.target.result;
+  };
+  r.readAsDataURL(file);
+  e.target.value='';
+});
+document.getElementById('ppAttrCfg').addEventListener('click',ppAttrModalOpen);
+document.getElementById('ppAttrClose').addEventListener('click',()=>{document.getElementById('ppAttrModal').style.display='none';});
+document.getElementById('ppAttrScopeTgl').addEventListener('click',()=>{
+  ppAttrTargetOwn=!ppAttrTargetOwn;
+  if(!ppAttrTargetOwn&&ppCur)ppCur.attrKeys=null;
+  ppAttrModalRender();
+});
+document.getElementById('ppAttrOk').addEventListener('click',()=>{
+  document.getElementById('ppAttrModal').style.display='none';
+  if(ppCur){
+    document.getElementById('ppAttrScope').textContent=ppCur.attrKeys?'eigene Auswahl':'Vorgabe';
+    ppRenderAttrs();
   }
 });
-
-document.getElementById('abPDF').addEventListener('click',()=>{
-  const gs=abGrps(marked.size>0);const datum=new Date().toLocaleString('de-DE');
-  let rows='';
-  Object.keys(gs).sort().forEach(pos=>{
-    const e=protokoll[pos]||{};const soll=getSoll(gs[pos]);
-    const ist=e.ist!==undefined?e.ist:'-';
-    const diff=e.ist!==undefined?e.ist-soll:'-';
-    const col=e.status==='ok'?'#006622':e.status==='abweichung'?'#995500':'#888';
-    const istDm=e.istDm!==undefined?e.istDm:'-';
-    const sollDm=e.sollDm!==undefined?e.sollDm:'-';
-    const diffDm=e.istDm!==undefined&&e.sollDm!==undefined?e.istDm-e.sollDm:'-';
-    const dmCol=diffDm!=='-'&&diffDm!==0?'#cc3300':'inherit';
-    rows+='<tr><td><b>Pos. '+esc(pos)+'</b></td>'
-      +'<td style="text-align:center">'+soll+'</td>'
-      +'<td style="text-align:center">'+ist+'</td>'
-      +'<td style="text-align:center;color:'+(diff!=='-'&&diff!==0?'#cc3300':'inherit')+'">'+(diff!=='-'?(diff>0?'+':'')+diff:'-')+'</td>'
-      +'<td style="text-align:center">'+sollDm+'</td>'
-      +'<td style="text-align:center">'+istDm+'</td>'
-      +'<td style="text-align:center;color:'+dmCol+'">'+(diffDm!=='-'?(diffDm>0?'+':'')+diffDm:'-')+'</td>'
-      +'<td style="color:'+col+';font-weight:bold">'+(e.status||'offen')+'</td>'
-      +'<td>'+esc(e.kommentar||'')+'</td>'
-      +'<td style="font-size:10px;color:#666">'+esc(e.zeit||'')+'</td></tr>';
-  });
-  // Fotoanlage aufbauen
-  let fotoCards='';
-  Object.keys(gs).sort().forEach(pos=>{
-    const e=protokoll[pos]||{};if(!e.fotoUrl)return;
-    const col=e.status==='ok'?'#006622':e.status==='abweichung'?'#cc4400':'#888';
-    const label=e.status==='ok'?'✓ BESTANDEN':e.status==='abweichung'?'⚠ ABWEICHUNG':'–';
-    fotoCards+='<div style="break-inside:avoid;border:1px solid #ccc;border-radius:5px;padding:10px;background:#fafafa">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px">'
-      +'<b style="font-size:13px">Pos. '+esc(pos)+'</b>'
-      +'<span style="color:'+col+';font-weight:bold;font-size:11px">'+label+'</span></div>'
-      +'<img src="'+esc(e.fotoUrl)+'" style="width:100%;max-height:220px;object-fit:contain;display:block;border:1px solid #ddd;border-radius:3px">'
-      +(e.kommentar?'<div style="margin-top:6px;font-size:11px;color:#555;font-style:italic">"'+esc(e.kommentar)+'"</div>':'')
-      +'<div style="margin-top:4px;font-size:10px;color:#aaa">'+( e.zeit||'')+'</div></div>';
-  });
-  const fotoSection=fotoCards
-    ?'<div style="margin-top:28px;page-break-before:auto">'
-      +'<h2 style="font-size:13px;font-family:Arial,sans-serif;border-bottom:2px solid #333;padding-bottom:5px;margin-bottom:14px">Fotoanlage ('+Object.values(protokoll).filter(e=>e.fotoUrl).length+' Fotos)</h2>'
-      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">'+fotoCards+'</div></div>'
-    :'';
-  const html='<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Bewehrungsabnahme</title>'
-    +'<style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px}h1{font-size:17px;margin-bottom:4px}'
-    +'.sub{color:#666;font-size:10px;margin-bottom:18px}table{width:100%;border-collapse:collapse}'
-    +'th{background:#222;color:#fff;padding:7px 9px;text-align:left;font-size:11px}'
-    +'td{padding:6px 9px;border-bottom:1px solid #ddd;vertical-align:top}tr:nth-child(even){background:#f7f7f7}'
-    +'@media print{.no-print{display:none}}</style></head>'
-    +'<body><h1>Bewehrungsabnahme-Protokoll</h1>'
-    +'<div class="sub">Erstellt: '+esc(datum)+' · '+esc(fname)+'</div>'
-    +'<table><thead><tr><th>Position</th><th>Soll Stk</th><th>Ist Stk</th><th>Diff</th>'
-    +'<th>Soll Ø</th><th>Ist Ø</th><th>Diff Ø</th><th>Status</th><th>Kommentar</th><th>Uhrzeit</th>'
-    +'</tr></thead><tbody>'+rows+'</tbody></table>'
-    +fotoSection
-    +'</body></html>';
-  const w=window.open('','_blank');w.document.write(html);w.document.close();setTimeout(()=>w.print(),400);
+document.getElementById('ppExpPDF').addEventListener('click',()=>{if(ppCur)ppExportPDF(ppCur);});
+document.getElementById('ppExpPNG').addEventListener('click',()=>{if(ppCur)ppExportPNG(ppCur);});
+document.getElementById('ppExpZip').addEventListener('click',ppExportZip);
+document.getElementById('ppExpCSV').addEventListener('click',()=>{
+  if(!PP.length){toast('Keine Prüfpunkte','warn');return;}
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([ppCSV()],{type:'text/csv;charset=utf-8'}));
+  a.download='Pruefpunkte_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();toast('CSV exportiert');
 });
+['mpPP','ppDel','ppViewGo','ppShot','ppKritAdd','ppKritFromTpl','tplAdd','ppFotoBtn',
+ 'ppAttrCfg','ppAttrClose','ppAttrScopeTgl','ppAttrOk','ppExpPDF','ppExpPNG','ppExpZip','ppExpCSV'].forEach(id=>{
+  const el=document.getElementById(id);if(!el)return;
+  el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
+});
+
+ppLoadSettings();
+ppRenderList();
+
 
 // ── Stichproben-Abnahme ─────────────────────────────────────────────────────
 function openStichprobe(){
@@ -1469,7 +2118,7 @@ function openStichprobe(){
   const INP='width:100%;background:#0a1320;border:1px solid var(--border);border-radius:4px;'
     +'padding:7px 8px;font-family:inherit;font-size:22.5px;font-weight:700;text-align:center;outline:none;-webkit-appearance:none';
   for(const pos of keys){
-    const soll=getSoll(groups[pos]),sollDm=getSollDm(groups[pos]),saved=protokoll[pos]||{};
+    const soll=sollStk(groups[pos]),sollDm=getSollDm(groups[pos]),saved=protokoll[pos]||{};
     const dmLabel=sollDm!==null?'Soll: '+soll+' Stäbe · Ø '+sollDm+' mm':'Soll: '+soll+' Stäbe · Ø –';
     const row=document.createElement('div');
     row.style.cssText='background:#080a0f;border:1px solid var(--border);border-radius:7px;padding:10px 12px';
@@ -1534,14 +2183,43 @@ function saveStichprobe(status){
     istMap[pos].sollDm=inp.dataset.solldm!==''?parseFloat(inp.dataset.solldm):undefined;
     istMap[pos].istDm=inp.value!==''?parseFloat(inp.value):undefined;
   });
+  // Werte merken, damit ein erneutes Öffnen der Stichprobe vorbelegt ist
   Object.entries(istMap).forEach(([pos,d])=>{
     if(!protokoll[pos])protokoll[pos]={};
     Object.assign(protokoll[pos],{pos,soll:d.soll,ist:d.ist,sollDm:d.sollDm,istDm:d.istDm,status,kommentar:komm,zeit});
-    if(fi.style.display!=='none'&&fi.src)Object.assign(protokoll[pos],{fotoUrl:fi.src,fotoName:fn});
   });
+  // Die Stichprobe wird als Prüfpunkt mit Zählung abgelegt und läuft damit in
+  // dasselbe Protokoll und dieselben Exporte wie die übrigen Prüfpunkte.
+  const zaehlung=Object.entries(istMap).map(([pos,d])=>({pos,soll:d.soll,ist:d.ist,sollDm:d.sollDm,istDm:d.istDm}));
+  const ids=[...marked],idSet=new Set(ids);
+  ppSeq++;
+  const posLbl=zaehlung.map(z=>z.pos).join(', ');
+  const pp={
+    nr:ppSeq,
+    titel:'Stichprobe '+(posLbl.length>34?posLbl.slice(0,32)+'…':posLbl),
+    ids,guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
+    view:ppView(),bildRaw:null,bildW:0,bildH:0,attrKeys:null,
+    kriterien:[
+      {text:'Stabanzahl je Position',status:zaehlung.every(z=>z.ist===undefined||z.ist===z.soll)?'io':'nio'},
+      {text:'Stabdurchmesser je Position',status:zaehlung.every(z=>z.istDm===undefined||z.sollDm===undefined||z.istDm===z.sollDm)?'io':'nio'}
+    ],
+    ist:zaehlung.reduce((a,z)=>a+(z.ist||0),0)||undefined,
+    kommentar:komm,foto:null,fotoName:'',fotoW:0,fotoH:0,
+    zaehlung,zeit
+  };
+  if(status==='abweichung')pp.kriterien.forEach(k=>{if(k.status==='io')k.status='nio';});
+  ppFrame(ids);
+  pp.view=ppView();
+  pp.bildRaw=ppCapture(pp);
+  if(fi.style.display!=='none'&&fi.src){
+    pp.foto=fi.src;pp.fotoName=fn;
+    pp.fotoW=fi.naturalWidth;pp.fotoH=fi.naturalHeight;
+  }
+  PP.push(pp);
   document.getElementById('stichModal').style.display='none';
-  buildAbList();
-  toast(Object.keys(istMap).length+' Pos. → '+(status==='ok'?'Bestanden':'Abweichung'));
+  ppClearMarks();
+  ppOpen(pp);
+  toast('Stichprobe → Prüfpunkt P'+pp.nr+' ('+zaehlung.length+' Pos.)');
 }
 document.getElementById('stichClose').addEventListener('click',()=>document.getElementById('stichModal').style.display='none');
 document.getElementById('mpStich').addEventListener('click',openStichprobe);
@@ -2058,8 +2736,18 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='1.8';
+const APP_VERSION='2.0';
 const APP_CHANGELOG=[
+  {v:'2.0', date:'2026-07-23', notes:[
+    'Abnahme neu organisiert: Prüfpunkte werden im Viewer am Modell festgelegt („＋ Prüfpunkt“) statt automatisch aus allen Modellgruppen erzeugt',
+    'Jeder Prüfpunkt speichert Kameraansicht, beschriftetes Modellbild, Stab-GUIDs, Attributauswahl und Prüfkriterien',
+    'Frei definierbare Prüfkriterien mit Ankreuzkästchen i.O. / n.i.O. / n.z.; Vorlage wird im Browser gespeichert',
+    'Export je Prüfpunkt als echtes PDF und als Screenshot; Dalux-Paket als ZIP mit PDF + PNG je Prüfpunkt',
+    'Kästchen wahlweise leer (vor Ort abhaken) oder mit dem Status aus der App ausgefüllt',
+    'Protokollkopf: Bauvorhaben, Bauteil, Achse, Prüfer, Firma, Datum – plus Unterschriftenfelder im PDF',
+    'Stichprobe erzeugt jetzt einen Prüfpunkt und läuft in dieselben Exporte',
+    'Positionsbezug über GUIDs statt über das Gruppierfeld – Einträge gehen beim Wechsel der Gruppierung nicht mehr verloren',
+  ]},
   {v:'1.8', date:'2026-06-30', notes:[
     'Viewer: Mehrfachauswahl von Gruppen – mehrere Werte (z.B. BA_1 + BA_11) gleichzeitig anzeigen; erneutes Antippen blendet wieder aus, „Alle" zeigt alles',
   ]},
