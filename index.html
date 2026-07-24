@@ -936,7 +936,17 @@ function initThree(){
   function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();}
   loop();
   canvas.addEventListener('touchend',()=>{lastTouchEnd=Date.now();},{passive:true});
-  canvas.addEventListener('click',e=>{if(Date.now()-lastTouchEnd<700)return;if(!boxMode)doRaycast(e.clientX,e.clientY);});
+  // Markieren nur bei einem echten Klick, nicht am Ende eines Dreh-Zugs.
+  // Der Browser feuert 'click' auch nach dem Ziehen, wenn Maustaste runter und
+  // hoch auf demselben Element landen – dann darf nicht markiert werden.
+  let downX=0,downY=0,dragged=false;
+  canvas.addEventListener('mousedown',e=>{downX=e.clientX;downY=e.clientY;dragged=false;});
+  window.addEventListener('mousemove',e=>{if(Math.hypot(e.clientX-downX,e.clientY-downY)>5)dragged=true;});
+  canvas.addEventListener('click',e=>{
+    if(Date.now()-lastTouchEnd<700)return;
+    if(dragged||Math.hypot(e.clientX-downX,e.clientY-downY)>5)return;
+    if(!boxMode)doRaycast(e.clientX,e.clientY);
+  });
 }
 
 function build3D(objs){
@@ -3109,12 +3119,16 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.8';
+const APP_VERSION='2.9';
 const APP_CHANGELOG=[
+  {v:'2.9', date:'2026-07-24', notes:[
+    'Viewer: Drehen mit der Maus markiert kein Element mehr, wenn der Zug zufällig auf einem Stab endet – markiert wird nur noch bei einem echten Klick ohne Mausbewegung',
+  ]},
   {v:'2.8', date:'2026-07-24', notes:[
     'Soll-Wert je Prüfkriterium ist jetzt editierbar – stimmt der Wert im IFC-Attribut nicht, lässt er sich direkt korrigieren; die Korrektur erscheint in PDF und PNG und bleibt bei „↺ Attribute" erhalten',
     'Neuer Knopf „aus Prüfpunkt" bei der Kriterien-Vorlage: übernimmt die eigenen (nicht aus Attributen erzeugten) Kriterien des aktuellen Prüfpunkts in die Vorlage',
