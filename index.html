@@ -1932,7 +1932,7 @@ async function ppPDF(pp){
   const need=h=>{if(y+h>BOT){d.addPage();y=18;}};
 
   d.setFont('helvetica','bold');d.setFontSize(15);d.setTextColor(20);
-  d.text('Bewehrungsabnahme – Prüfprotokoll',L,y);y+=6.5;
+  d.text('Bewehrungsüberprüfung',L,y);y+=6.5;
   d.setFontSize(11);d.setTextColor(0,120,170);
   d.text('Prüfpunkt P'+pad2(pp.nr)+(pp.titel?'  ·  '+pp.titel:''),L,y);y+=3;
   d.setDrawColor(150);d.setLineWidth(.4);d.line(L,y,R,y);y+=6;
@@ -2062,14 +2062,6 @@ async function ppPDF(pp){
     y+=ih+7;
   }
 
-  need(24);
-  y+=10;
-  d.setDrawColor(110);d.setLineWidth(.4);
-  d.line(L,y,L+72,y);d.line(L+96,y,L+168,y);
-  d.setFont('helvetica','normal');d.setFontSize(7.6);d.setTextColor(120);
-  d.text('Datum, Unterschrift Prüfer',L,y+4);
-  d.text('Datum, Unterschrift Bauleitung',L+96,y+4);
-
   const n=d.internal.getNumberOfPages();
   for(let p=1;p<=n;p++){
     d.setPage(p);
@@ -2124,7 +2116,7 @@ async function ppProtokollPNG(pp){
   }
 
   // Kopf
-  font(30,true);x.fillStyle=C.ink;x.fillText('Bewehrungsabnahme – Prüfprotokoll',m,y+8);y+=40;
+  font(30,true);x.fillStyle=C.ink;x.fillText('Bewehrungsüberprüfung',m,y+8);y+=40;
   font(20,true);x.fillStyle=C.sub;
   x.fillText('Prüfpunkt P'+pad2(pp.nr)+(pp.titel?'  ·  '+pp.titel:''),m,y);y+=14;
   x.strokeStyle='#9aa5b5';x.lineWidth=1.4;x.beginPath();x.moveTo(m,y);x.lineTo(R,y);x.stroke();y+=26;
@@ -2228,17 +2220,8 @@ async function ppProtokollPNG(pp){
     y+=ih+22;
   }
 
-  // Unterschriften
-  y+=30;
-  x.strokeStyle='#6b7280';x.lineWidth=1.2;
-  x.beginPath();x.moveTo(m,y);x.lineTo(m+cw*.42,y);x.stroke();
-  x.beginPath();x.moveTo(m+cw*.55,y);x.lineTo(m+cw*.97,y);x.stroke();
-  font(13);x.fillStyle=C.lbl;
-  x.fillText('Datum, Unterschrift Prüfer',m,y+20);
-  x.fillText('Datum, Unterschrift Bauleitung',m+cw*.55,y+20);
-  y+=40;
-
-  // Fußzeile
+  // Fußzeile (Unterschrift erfolgt in Dalux)
+  y+=10;
   x.strokeStyle=C.line;x.lineWidth=1;x.beginPath();x.moveTo(m,y);x.lineTo(R,y);x.stroke();y+=20;
   font(12);x.fillStyle=C.lbl;
   x.fillText('P'+pad2(pp.nr)+(pp.titel?' · '+pp.titel:'')+'   ·   erzeugt '+new Date().toLocaleString('de-DE'),m,y);
@@ -3094,12 +3077,17 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.6';
+const APP_VERSION='2.7';
 const APP_CHANGELOG=[
+  {v:'2.7', date:'2026-07-24', notes:[
+    'Protokoll heißt jetzt „Bewehrungsüberprüfung" (PDF und PNG)',
+    'Unterschriftenfelder entfernt – die Unterschrift erfolgt direkt in Dalux',
+  ]},
   {v:'2.6', date:'2026-07-24', notes:[
     'Neuer Export: komplettes Prüfprotokoll als PNG-Bild („⬇ Protokoll (PNG)") – für die Dalux-Checkliste, wo Anhänge als Bild annotiert werden',
     'Das PNG enthält Kopf, Modellbild, Soll/Ist, alle Kriterien mit Kästchen (leer oder ausgefüllt), Bemerkung, Foto und Unterschriftenfelder',
