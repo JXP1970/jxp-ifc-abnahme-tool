@@ -444,7 +444,7 @@ select.sb-inp{appearance:none}
           </h3>
           <div style="display:flex;gap:8px;align-items:center;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:3px">
             <span style="flex:1"></span>
-            <span class="kh">i.O.</span><span class="kh">n.i.O.</span><span class="kh">n.z.</span>
+            <span class="kh">i.O.</span><span class="kh">n.i.O.</span>
             <span style="width:28px"></span>
           </div>
           <div id="ppKrit"></div>
@@ -1859,7 +1859,6 @@ function ppRenderKrit(){
       +'<input class="krit-soll'+(k.sollEdit?' edited':'')+'" value="'+esc(k.soll||'')+'" placeholder="Soll…" title="Soll-Wert – bei falschem IFC-Attribut hier korrigieren">'
       +'<button class="kb'+(k.status==='io'?' on-io':'')+'" data-s="io" title="in Ordnung">✓</button>'
       +'<button class="kb'+(k.status==='nio'?' on-nio':'')+'" data-s="nio" title="nicht in Ordnung">✗</button>'
-      +'<button class="kb'+(k.status==='nz'?' on-nz':'')+'" data-s="nz" title="nicht zutreffend">–</button>'
       +'<button class="btn btn-d" data-del="1" style="width:28px;padding:3px 0;font-size:13.5px" title="Zeile löschen">✕</button>';
     row.querySelector('.krit-txt').addEventListener('input',e=>{k.text=e.target.value;});
     const si=row.querySelector('.krit-soll');
@@ -2064,11 +2063,11 @@ async function ppPDF(pp){
   need(16);
   d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
   d.text('Prüfkriterien',L,y);
-  const cx=[R-40,R-26,R-12];
-  const sollX=R-52;   // rechte Kante der Soll-Spalte, links der Kästchen
+  const cx=[R-28,R-12];
+  const sollX=R-40;   // rechte Kante der Soll-Spalte, links der Kästchen
   d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
   d.text('SOLL',sollX,y,{align:'right'});
-  d.text('i.O.',cx[0],y);d.text('n.i.O.',cx[1]-1.6,y);d.text('n.z.',cx[2],y);
+  d.text('i.O.',cx[0],y);d.text('n.i.O.',cx[1]-1.6,y);
   y+=1.6;d.setDrawColor(190);d.line(L,y,R,y);y+=5.4;
   const krit=pp.kriterien||[];
   if(!krit.length){
@@ -2082,7 +2081,6 @@ async function ppPDF(pp){
     if(k.soll){d.setTextColor(90);d.text(String(k.soll).slice(0,20),sollX,y,{align:'right'});d.setTextColor(20);}
     pdfBox(d,cx[0],y-3.3,4.2,voll&&k.status==='io','check');
     pdfBox(d,cx[1],y-3.3,4.2,voll&&k.status==='nio','x');
-    pdfBox(d,cx[2],y-3.3,4.2,voll&&k.status==='nz','check');
     d.setDrawColor(228);d.setLineWidth(.2);d.line(L,y+2.4,R,y+2.4);
     y+=7;
   }
@@ -2230,11 +2228,11 @@ async function ppProtokollPNG(pp){
   y+=bh+24;
 
   // Prüfkriterien
-  const bs=26,cb3=R-bs,cb2=cb3-64,cb1=cb2-64,sollR=cb1-24;
+  const bs=26,cb2=R-bs,cb1=cb2-64,sollR=cb1-24;
   sectionTitle('Prüfkriterien');
   font(12);x.fillStyle=C.lbl;
   x.textAlign='center';
-  x.fillText('i.O.',cb1+bs/2,y-6);x.fillText('n.i.O.',cb2+bs/2,y-6);x.fillText('n.z.',cb3+bs/2,y-6);
+  x.fillText('i.O.',cb1+bs/2,y-6);x.fillText('n.i.O.',cb2+bs/2,y-6);
   x.textAlign='right';x.fillText('SOLL',sollR,y-6);
   x.textAlign='left';
   y+=16;
@@ -2246,7 +2244,6 @@ async function ppProtokollPNG(pp){
     if(k.soll){font(15);x.fillStyle=C.soll;x.textAlign='right';x.fillText(String(k.soll).slice(0,24),sollR,y+4);x.textAlign='left';}
     checkbox(cb1,y-16,bs,voll&&k.status==='io','check');
     checkbox(cb2,y-16,bs,voll&&k.status==='nio','x');
-    checkbox(cb3,y-16,bs,voll&&k.status==='nz','check');
     x.strokeStyle='#e6eaf0';x.lineWidth=1;x.beginPath();x.moveTo(m,y+16);x.lineTo(R,y+16);x.stroke();
     y+=34;
   }
@@ -3163,12 +3160,16 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.0';
+const APP_VERSION='3.1';
 const APP_CHANGELOG=[
+  {v:'3.1', date:'2026-07-24', notes:[
+    'Prüfkriterien: Spalte „n.z." entfernt – es bleiben i.O. und n.i.O. (Oberfläche, PDF und PNG)',
+  ]},
   {v:'3.0', date:'2026-07-24', notes:[
     'Im Viewer eingetragene Maße erscheinen jetzt auch im Protokoll-Modellbild (PDF und PNG) – mit Maßzahl im Kästchen, kontraststark auf hellem wie dunklem Hintergrund',
   ]},
