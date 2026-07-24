@@ -192,7 +192,10 @@ select.sb-inp{appearance:none}
 .krit-row:last-child{border:none}
 .krit-txt{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:16.5px;outline:none;padding:2px 3px;border-radius:3px}
 .krit-txt:focus{background:var(--hover)}
-.krit-soll{flex-shrink:0;font-size:14px;color:var(--accent-txt);font-family:var(--mono);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;text-align:right}
+.krit-soll{flex-shrink:0;width:130px;font-size:14px;color:var(--accent-txt);font-family:var(--mono);text-align:right;background:transparent;border:1px solid transparent;border-radius:4px;padding:3px 6px;outline:none}
+.krit-soll:hover{border-color:var(--border)}
+.krit-soll:focus{border-color:var(--accent);background:var(--card);text-align:left}
+.krit-soll.edited{color:var(--warn);border-color:var(--warn)}
 .kb{width:38px;height:32px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:manipulation;flex-shrink:0}
 .kb.on-io{border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
 .kb.on-nio{border-color:var(--err);color:var(--err);background:var(--err-bg)}
@@ -486,9 +489,12 @@ select.sb-inp{appearance:none}
         <div class="hd-lbl">Firma</div><input class="hd-inp" id="hdFa" data-hd="fa" placeholder="Firma">
         <div class="hd-lbl">Datum</div><input class="hd-inp" id="hdDt" data-hd="dt" type="date">
         <hr class="d-sep">
-        <div class="hd-lbl" style="display:flex;justify-content:space-between;align-items:center">
+        <div class="hd-lbl" style="display:flex;justify-content:space-between;align-items:center;gap:6px">
           <span>Kriterien-Vorlage</span>
-          <button class="btn btn-s" id="tplAdd" style="font-size:13.5px;padding:2px 7px">＋</button>
+          <span style="display:flex;gap:5px">
+            <button class="btn btn-s" id="tplFromPP" style="font-size:12px;padding:2px 6px" title="Die eigenen Kriterien des aktuellen Prüfpunkts als Vorlage übernehmen">aus Prüfpunkt</button>
+            <button class="btn btn-s" id="tplAdd" style="font-size:13.5px;padding:2px 7px" title="Leere Kriterienzeile hinzufügen">＋</button>
+          </span>
         </div>
         <div style="font-size:12px;color:var(--muted);line-height:1.5;margin:4px 0 7px">Gilt für neu angelegte Prüfpunkte. Wird im Browser gespeichert.</div>
         <div id="tplList"></div>
@@ -1510,8 +1516,13 @@ function ppAttrData(pp){
 // Wirklichkeit abhaken. Vorhandene Bewertungen werden beim Neuaufbau anhand des
 // Attributnamens übernommen, damit ein erneuter Aufbau keine Häkchen verwirft.
 function kritFromAttrs(pp){
-  const alt={};(pp.kriterien||[]).forEach(k=>{if(k.attr)alt[k.attr]=k.status;});
-  return ppAttrData(pp).map(([k,v])=>({text:k,soll:String(v),attr:k,status:alt[k]||''}));
+  // Status und manuell korrigierten Soll-Wert je Attribut erhalten
+  const alt={};(pp.kriterien||[]).forEach(k=>{if(k.attr)alt[k.attr]=k;});
+  return ppAttrData(pp).map(([k,v])=>{
+    const prev=alt[k];
+    if(prev&&prev.sollEdit)return {text:k,soll:prev.soll,attr:k,status:prev.status||'',sollEdit:true};
+    return {text:k,soll:String(v),attr:k,status:prev?prev.status||'':''};
+  });
 }
 
 // ── Kameraansicht sichern/wiederherstellen ──────────────────────────────────
@@ -1793,12 +1804,17 @@ function ppRenderKrit(){
   pp.kriterien.forEach((k,i)=>{
     const row=document.createElement('div');row.className='krit-row';
     row.innerHTML='<input class="krit-txt" value="'+esc(k.text)+'" placeholder="Kriterium…">'
-      +(k.soll?'<span class="krit-soll" title="Soll laut IFC">'+esc(k.soll)+'</span>':'')
+      +'<input class="krit-soll'+(k.sollEdit?' edited':'')+'" value="'+esc(k.soll||'')+'" placeholder="Soll…" title="Soll-Wert – bei falschem IFC-Attribut hier korrigieren">'
       +'<button class="kb'+(k.status==='io'?' on-io':'')+'" data-s="io" title="in Ordnung">✓</button>'
       +'<button class="kb'+(k.status==='nio'?' on-nio':'')+'" data-s="nio" title="nicht in Ordnung">✗</button>'
       +'<button class="kb'+(k.status==='nz'?' on-nz':'')+'" data-s="nz" title="nicht zutreffend">–</button>'
       +'<button class="btn btn-d" data-del="1" style="width:28px;padding:3px 0;font-size:13.5px" title="Zeile löschen">✕</button>';
     row.querySelector('.krit-txt').addEventListener('input',e=>{k.text=e.target.value;});
+    const si=row.querySelector('.krit-soll');
+    si.addEventListener('input',e=>{
+      k.soll=e.target.value;k.sollEdit=true;   // manuell korrigiert – bleibt bei „↺ Attribute" erhalten
+      si.classList.add('edited');
+    });
     row.querySelectorAll('.kb').forEach(b=>{
       const set=()=>{k.status=(k.status===b.dataset.s)?'':b.dataset.s;ppRenderKrit();ppRenderList();};
       b.addEventListener('click',set);
@@ -2382,6 +2398,20 @@ document.getElementById('tplAdd').addEventListener('click',()=>{
   const inps=document.querySelectorAll('#tplList input');
   if(inps.length)inps[inps.length-1].focus();
 });
+// Vorlage aus dem aktuellen Prüfpunkt: übernimmt dessen eigene (nicht aus
+// Attributen erzeugte) Kriterien, da die Attribut-Kriterien ohnehin automatisch
+// für jeden neuen Prüfpunkt entstehen. Bereits vorhandene Vorlagenzeilen bleiben.
+document.getElementById('tplFromPP').addEventListener('click',()=>{
+  if(!ppCur){toast('Kein Prüfpunkt gewählt','warn');return;}
+  const eigen=ppCur.kriterien.filter(k=>!k.attr&&k.text.trim()).map(k=>k.text.trim());
+  if(!eigen.length){toast('Keine eigenen Kriterien in diesem Prüfpunkt','warn');return;}
+  const have=new Set(kritTpl.map(t=>t.trim()));
+  const neu=eigen.filter(t=>!have.has(t));
+  if(!neu.length){toast('Bereits in der Vorlage','warn');return;}
+  kritTpl=kritTpl.filter(t=>t.trim()).concat(neu);
+  tplRender();ppSaveSettings();
+  toast(neu.length+' in Vorlage übernommen');
+});
 document.querySelectorAll('[data-hd]').forEach(el=>{
   el.addEventListener('input',()=>{HD[el.dataset.hd]=el.value;ppSaveSettings();});
 });
@@ -2432,7 +2462,7 @@ document.getElementById('ppExpCSV').addEventListener('click',()=>{
   a.click();toast('CSV exportiert');
 });
 ['mpPP','ppDel','ppViewGo','ppShot','ppKritAdd','ppKritFromAttr','ppKritFromTpl','tplAdd','ppFotoBtn',
- 'ppAttrCfg','ppAttrClose','ppAttrScopeTgl','ppAttrOk','ppExpProtPNG','ppExpPDF','ppExpPNG','ppExpZip','ppExpCSV'].forEach(id=>{
+ 'tplFromPP','ppAttrCfg','ppAttrClose','ppAttrScopeTgl','ppAttrOk','ppExpProtPNG','ppExpPDF','ppExpPNG','ppExpZip','ppExpCSV'].forEach(id=>{
   const el=document.getElementById(id);if(!el)return;
   el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
 });
@@ -3078,12 +3108,17 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.7';
+const APP_VERSION='2.8';
 const APP_CHANGELOG=[
+  {v:'2.8', date:'2026-07-24', notes:[
+    'Soll-Wert je Prüfkriterium ist jetzt editierbar – stimmt der Wert im IFC-Attribut nicht, lässt er sich direkt korrigieren; die Korrektur erscheint in PDF und PNG und bleibt bei „↺ Attribute" erhalten',
+    'Neuer Knopf „aus Prüfpunkt" bei der Kriterien-Vorlage: übernimmt die eigenen (nicht aus Attributen erzeugten) Kriterien des aktuellen Prüfpunkts in die Vorlage',
+  ]},
   {v:'2.7', date:'2026-07-24', notes:[
     'Protokoll heißt jetzt „Bewehrungsüberprüfung" (PDF und PNG)',
     'Unterschriftenfelder entfernt – die Unterschrift erfolgt direkt in Dalux',
