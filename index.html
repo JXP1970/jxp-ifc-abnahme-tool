@@ -192,6 +192,7 @@ select.sb-inp{appearance:none}
 .krit-row:last-child{border:none}
 .krit-txt{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:16.5px;outline:none;padding:2px 3px;border-radius:3px}
 .krit-txt:focus{background:var(--hover)}
+.krit-soll{flex-shrink:0;font-size:14px;color:var(--accent-txt);font-family:var(--mono);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis;text-align:right}
 .kb{width:38px;height:32px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;touch-action:manipulation;flex-shrink:0}
 .kb.on-io{border-color:var(--ok);color:var(--ok);background:var(--ok-bg)}
 .kb.on-nio{border-color:var(--err);color:var(--err);background:var(--err-bg)}
@@ -433,8 +434,9 @@ select.sb-inp{appearance:none}
         <div class="pp-card">
           <h3>Prüfkriterien
             <span style="display:flex;gap:5px">
-              <button class="btn btn-s" id="ppKritAdd" style="font-size:13.5px;padding:3px 8px">＋ Zeile</button>
+              <button class="btn btn-s" id="ppKritFromAttr" style="font-size:13.5px;padding:3px 8px" title="Kriterien aus den gewählten IFC-Attributen neu aufbauen">↺ Attribute</button>
               <button class="btn btn-s" id="ppKritFromTpl" style="font-size:13.5px;padding:3px 8px" title="Kriterien aus der Vorlage rechts neu laden">↺ Vorlage</button>
+              <button class="btn btn-s" id="ppKritAdd" style="font-size:13.5px;padding:3px 8px">＋ Zeile</button>
             </span>
           </h3>
           <div style="display:flex;gap:8px;align-items:center;padding-bottom:5px;border-bottom:1px solid var(--border);margin-bottom:3px">
@@ -1500,6 +1502,15 @@ function ppAttrData(pp){
   return out;
 }
 
+// Prüfkriterien aus den gewählten IFC-Attributen: je Attribut eine Zeile mit
+// dem Soll-Wert als Referenz. So kann der Prüfer jeden Attributwert gegen die
+// Wirklichkeit abhaken. Vorhandene Bewertungen werden beim Neuaufbau anhand des
+// Attributnamens übernommen, damit ein erneuter Aufbau keine Häkchen verwirft.
+function kritFromAttrs(pp){
+  const alt={};(pp.kriterien||[]).forEach(k=>{if(k.attr)alt[k.attr]=k.status;});
+  return ppAttrData(pp).map(([k,v])=>({text:k,soll:String(v),attr:k,status:alt[k]||''}));
+}
+
 // ── Kameraansicht sichern/wiederherstellen ──────────────────────────────────
 function ppView(){
   if(!oc)return null;
@@ -1636,10 +1647,15 @@ function ppNew(){
     nr:ppSeq,titel:'',ids,anzahl:stabanzahl(BARS.filter(b=>idSet.has(b.id))),objekte:ids.length,datei:fname,
     guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
     view:null,bildRaw:null,bildW:0,bildH:0,attrKeys:null,
-    kriterien:kritTpl.map(t=>({text:t,status:''})),
+    kriterien:[],
     ist:undefined,kommentar:'',foto:null,fotoName:'',fotoW:0,fotoH:0,
     zaehlung:null,zeit:new Date().toLocaleString('de-DE')
   };
+  // Kriterien automatisch aus den gewählten IFC-Attributen; zusätzliche feste
+  // Prüfpunkte aus der Vorlage (z.B. Sauberkeit, Betondeckung) hängen danach an,
+  // ohne einen bereits als Attribut vorhandenen Namen zu doppeln.
+  const attrK=kritFromAttrs(pp),have=new Set(attrK.map(k=>k.text));
+  pp.kriterien=attrK.concat(kritTpl.filter(t=>t.trim()&&!have.has(t.trim())).map(t=>({text:t,status:''})));
   // Beim Anlegen wird auf die Auswahl eingepasst, damit das Bild sie formatfüllend
   // zeigt. „⟳ Neu aufnehmen“ übernimmt dagegen die aktuelle Ansicht unverändert.
   ppFrame(ids);
@@ -1768,12 +1784,13 @@ function ppRenderKrit(){
   const pp=ppCur;if(!pp)return;
   if(!pp.kriterien.length){
     c.innerHTML='<div style="color:var(--muted);font-size:15px;padding:7px 0;line-height:1.6">'
-      +'Noch keine Kriterien.<br>„＋ Zeile" hier, oder rechts eine Vorlage anlegen und „↺ Vorlage" drücken.</div>';
+      +'Noch keine Kriterien.<br>„↺ Attribute" baut sie aus den gewählten IFC-Attributen auf, „＋ Zeile" fügt eine eigene hinzu.</div>';
     return;
   }
   pp.kriterien.forEach((k,i)=>{
     const row=document.createElement('div');row.className='krit-row';
     row.innerHTML='<input class="krit-txt" value="'+esc(k.text)+'" placeholder="Kriterium…">'
+      +(k.soll?'<span class="krit-soll" title="Soll laut IFC">'+esc(k.soll)+'</span>':'')
       +'<button class="kb'+(k.status==='io'?' on-io':'')+'" data-s="io" title="in Ordnung">✓</button>'
       +'<button class="kb'+(k.status==='nio'?' on-nio':'')+'" data-s="nio" title="nicht in Ordnung">✗</button>'
       +'<button class="kb'+(k.status==='nz'?' on-nz':'')+'" data-s="nz" title="nicht zutreffend">–</button>'
@@ -1977,7 +1994,9 @@ async function ppPDF(pp){
   d.setFont('helvetica','bold');d.setFontSize(9.5);d.setTextColor(20);
   d.text('Prüfkriterien',L,y);
   const cx=[R-40,R-26,R-12];
+  const sollX=R-52;   // rechte Kante der Soll-Spalte, links der Kästchen
   d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
+  d.text('SOLL',sollX,y,{align:'right'});
   d.text('i.O.',cx[0],y);d.text('n.i.O.',cx[1]-1.6,y);d.text('n.z.',cx[2],y);
   y+=1.6;d.setDrawColor(190);d.line(L,y,R,y);y+=5.4;
   const krit=pp.kriterien||[];
@@ -1988,7 +2007,8 @@ async function ppPDF(pp){
   for(const k of krit){
     need(8);
     d.setFont('helvetica','normal');d.setFontSize(9.5);d.setTextColor(20);
-    d.text(String(k.text||'').slice(0,58),L+1,y);
+    d.text(String(k.text||'').slice(0,42),L+1,y);
+    if(k.soll){d.setTextColor(90);d.text(String(k.soll).slice(0,20),sollX,y,{align:'right'});d.setTextColor(20);}
     pdfBox(d,cx[0],y-3.3,4.2,voll&&k.status==='io','check');
     pdfBox(d,cx[1],y-3.3,4.2,voll&&k.status==='nio','x');
     pdfBox(d,cx[2],y-3.3,4.2,voll&&k.status==='nz','check');
@@ -2178,12 +2198,25 @@ document.getElementById('ppKritAdd').addEventListener('click',()=>{
   const inps=document.querySelectorAll('#ppKrit .krit-txt');
   if(inps.length)inps[inps.length-1].focus();
 });
+document.getElementById('ppKritFromAttr').addEventListener('click',()=>{
+  if(!ppCur)return;
+  const attrK=kritFromAttrs(ppCur);
+  if(!attrK.length){toast('Keine Attribute gewählt – „⚙ Auswahl"','warn');return;}
+  // Attribut-Kriterien neu, manuelle Zeilen (ohne attr) bleiben erhalten
+  ppCur.kriterien=attrK.concat(ppCur.kriterien.filter(k=>!k.attr));
+  ppRenderKrit();ppRenderList();
+  toast(attrK.length+' Kriterien aus Attributen');
+});
 document.getElementById('ppKritFromTpl').addEventListener('click',()=>{
   if(!ppCur)return;
   if(!kritTpl.length){toast('Vorlage ist leer','warn');return;}
-  ppCur.kriterien=kritTpl.map(t=>({text:t,status:''}));
+  // Vorlage anhängen, ohne bereits vorhandene Zeilen zu doppeln
+  const have=new Set(ppCur.kriterien.map(k=>k.text));
+  const add=kritTpl.filter(t=>t.trim()&&!have.has(t)).map(t=>({text:t,status:''}));
+  if(!add.length){toast('Vorlage bereits enthalten','warn');return;}
+  ppCur.kriterien=ppCur.kriterien.concat(add);
   ppRenderKrit();ppRenderList();
-  toast('Kriterien aus Vorlage geladen');
+  toast(add.length+' Kriterien aus Vorlage');
 });
 document.getElementById('tplAdd').addEventListener('click',()=>{
   kritTpl.push('');tplRender();ppSaveSettings();
@@ -2238,7 +2271,7 @@ document.getElementById('ppExpCSV').addEventListener('click',()=>{
   a.download='Pruefpunkte_'+new Date().toISOString().slice(0,10)+'.csv';
   a.click();toast('CSV exportiert');
 });
-['mpPP','ppDel','ppViewGo','ppShot','ppKritAdd','ppKritFromTpl','tplAdd','ppFotoBtn',
+['mpPP','ppDel','ppViewGo','ppShot','ppKritAdd','ppKritFromAttr','ppKritFromTpl','tplAdd','ppFotoBtn',
  'ppAttrCfg','ppAttrClose','ppAttrScopeTgl','ppAttrOk','ppExpPDF','ppExpPNG','ppExpZip','ppExpCSV'].forEach(id=>{
   const el=document.getElementById(id);if(!el)return;
   el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
@@ -2882,12 +2915,19 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.4';
+const APP_VERSION='2.5';
 const APP_CHANGELOG=[
+  {v:'2.5', date:'2026-07-24', notes:[
+    'Prüfkriterien entstehen jetzt automatisch aus den gewählten IFC-Attributen – je Attribut eine Zeile mit dem Soll-Wert als Referenz und Ankreuzkästchen i.O. / n.i.O. / n.z.',
+    'Knopf „↺ Attribute" baut die Kriterien aus der aktuellen Attributauswahl neu auf und behält gesetzte Bewertungen; die Attributauswahl steuert damit direkt den Prüfumfang',
+    '„↺ Vorlage" hängt feste Zusatzkriterien (z.B. Sauberkeit, Betondeckung) an, ohne vorhandene zu doppeln',
+    'Soll-Wert je Kriterium erscheint auch im PDF in einer eigenen Spalte',
+  ]},
   {v:'2.4', date:'2026-07-24', notes:[
     'Soll ist jetzt die Stabanzahl (Summe BarCount) wie im Markierungsfenster, nicht mehr die Zahl der markierten Objekte – ein Objekt steht meist für mehrere verlegte Stäbe (z.B. 2 Objekte = 27 Stäbe)',
     'Nebenzeile und PDF weisen die Zahl der markierten Objekte zur Einordnung getrennt aus',
