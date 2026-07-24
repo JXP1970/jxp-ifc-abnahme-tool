@@ -1555,6 +1555,37 @@ function ppSetView(v){
 // Das Modellbild kann hell aufgenommen werden. In einer Dalux-Checkliste steht
 // es neben Handyfotos, und ausgedruckt zieht ein fast schwarzes Bild eine volle
 // Tonerseite – auf weißem Grund liest es sich in beiden Fällen besser.
+// Zeichnet die fertigen Messstrecken (Linie, Endpunkte, Maßtext) auf das
+// aufgenommene Bild. Nötig, weil die Maßzahlen im Viewer HTML-Overlays sind und
+// die 3D-Linie auf weißem Grund kaum sichtbar wäre – hier mit Kontrast und Kasten.
+function ppDrawMeasures(ctx,cnv,hell){
+  if(!measureObjects.length||!camera)return;
+  const W=cnv.width,H=cnv.height,s=W/1200;
+  const proj=p=>{const v=p.clone().project(camera);return{x:(v.x+1)/2*W,y:(1-v.y)/2*H,z:v.z};};
+  const lineCol=hell?'#b45309':'#ffe000',txtCol=hell?'#7c2d12':'#7a5b00';
+  ctx.textBaseline='middle';ctx.textAlign='center';
+  for(const mo of measureObjects){
+    if(!mo.spheres||mo.spheres.length<2)continue;
+    const a=proj(mo.spheres[0].position),b=proj(mo.spheres[1].position);
+    if(a.z>1||b.z>1)continue;
+    ctx.strokeStyle=lineCol;ctx.fillStyle=lineCol;ctx.lineWidth=Math.max(2,2.4*s);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    for(const p of [a,b]){ctx.beginPath();ctx.arc(p.x,p.y,Math.max(3,3.4*s),0,7);ctx.fill();}
+    const mid=proj(mo.mid),txt=mo.label?mo.label.textContent:'';
+    if(txt&&mid.z<=1){
+      ctx.font='700 '+Math.round(20*s)+'px Arial,sans-serif';
+      const pad=Math.round(8*s),h=Math.round(30*s),w=ctx.measureText(txt).width+pad*2;
+      const bx=mid.x-w/2,by=mid.y-h/2,r=Math.round(5*s);
+      ctx.beginPath();
+      if(ctx.roundRect)ctx.roundRect(bx,by,w,h,r);else ctx.rect(bx,by,w,h);
+      ctx.fillStyle='#ffffff';ctx.fill();
+      ctx.strokeStyle=lineCol;ctx.lineWidth=Math.max(1,1.4*s);ctx.stroke();
+      ctx.fillStyle=txtCol;ctx.fillText(txt,mid.x,mid.y+1);
+    }
+  }
+  ctx.textAlign='left';
+}
+
 function ppCapture(pp){
   if(!renderer||!scene||!camera||!meshes.length)return null;
   const sel=document.getElementById('ppShotMode');
@@ -1584,16 +1615,27 @@ function ppCapture(pp){
   });
   const ringVis=snapIndicatorRing&&snapIndicatorRing.visible;
   if(ringVis)snapIndicatorRing.visible=false;
+  // Mess-Objekte im WebGL-Bild ausblenden – sie werden anschließend sauber in 2D
+  // gezeichnet (Gelb wäre auf hellem Grund kaum sichtbar).
+  const measHid=[];
+  for(const mo of measureObjects){
+    if(mo.line&&mo.line.visible){mo.line.visible=false;measHid.push(mo.line);}
+    for(const sp of (mo.spheres||[]))if(sp&&sp.visible){sp.visible=false;measHid.push(sp);}
+  }
+  for(const p of measurePts)if(p.sphere&&p.sphere.visible){p.sphere.visible=false;measHid.push(p.sphere);}
+  if(measureLiveLine&&measureLiveLine.visible){measureLiveLine.visible=false;measHid.push(measureLiveLine);}
   renderer.render(scene,camera);
   const src=renderer.domElement;
   const c=document.createElement('canvas');
   c.width=src.width;c.height=src.height;
   const ctx=c.getContext('2d');
   ctx.drawImage(src,0,0);
+  ppDrawMeasures(ctx,c,hell);
   prev.forEach(p=>{
     p.m.visible=p.v;p.m.material.opacity=p.o;p.m.material.transparent=p.t;
     p.m.material.color.setHex(p.c);p.m.material.emissive.setHex(p.e);p.m.material.emissiveIntensity=p.i;
   });
+  measHid.forEach(o=>o.visible=true);
   scene.background=prevBg;buildGrid();
   if(ringVis)snapIndicatorRing.visible=true;
   pp.bildW=c.width;pp.bildH=c.height;
@@ -3120,12 +3162,16 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.9';
+const APP_VERSION='3.0';
 const APP_CHANGELOG=[
+  {v:'3.0', date:'2026-07-24', notes:[
+    'Im Viewer eingetragene Maße erscheinen jetzt auch im Protokoll-Modellbild (PDF und PNG) – mit Maßzahl im Kästchen, kontraststark auf hellem wie dunklem Hintergrund',
+  ]},
   {v:'2.9', date:'2026-07-24', notes:[
     'Viewer: Drehen mit der Maus markiert kein Element mehr, wenn der Zug zufällig auf einem Stab endet – markiert wird nur noch bei einem echten Klick ohne Mausbewegung',
   ]},
