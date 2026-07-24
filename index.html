@@ -185,7 +185,7 @@ select.sb-inp{appearance:none}
 .pp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--line);touch-action:manipulation;transition:background .1s}
 .pp-item:hover{background:var(--hover)}.pp-item.active{background:var(--sel)}
 .pp-thumb{width:46px;height:34px;object-fit:cover;border-radius:3px;border:1px solid var(--border);flex-shrink:0;background:var(--card)}
-.pp-nr{font-size:15px;font-weight:700;color:var(--accent);flex-shrink:0;min-width:26px}
+.pp-nr{font-size:15px;font-weight:700;color:var(--accent);flex-shrink:0;min-width:26px;max-width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pp-card{background:var(--card);border:1px solid var(--border);border-radius:7px;padding:12px;margin-bottom:14px}
 .pp-card h3{font-size:13.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:8px;font-weight:400;display:flex;justify-content:space-between;align-items:center}
 .krit-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line)}
@@ -390,8 +390,8 @@ select.sb-inp{appearance:none}
       <div id="ppForm" style="display:none">
         <!-- Kopfzeile -->
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-          <div style="font-size:25.5px;font-weight:700;color:var(--accent);flex-shrink:0" id="ppNr">P1</div>
-          <input id="ppTitel" class="t-inp" placeholder="Bezeichnung, z.B. Achse C – untere Lage" style="flex:1;min-width:180px;font-size:18px">
+          <input id="ppNr" class="t-inp" style="width:90px;flex-shrink:0;font-size:22px;font-weight:700;color:var(--accent);text-align:center" title="Kennung – frei umbenennbar, z.B. P1 oder A-Nord">
+          <input id="ppTitel" class="t-inp" placeholder="Bezeichnung, z.B. Achse C – untere Lage" style="flex:1;min-width:160px;font-size:18px">
           <button class="btn btn-d" id="ppDel" style="flex-shrink:0" title="Prüfpunkt löschen">🗑</button>
         </div>
         <div style="font-size:15px;color:var(--muted);margin-bottom:12px" id="ppSub">–</div>
@@ -1458,6 +1458,8 @@ let protoAttrKeys=null;                            // Attribut-Vorgabe fürs Pro
 let protoAttrSum=new Set(['Masse','BarWeightTotal']);
 
 function pad2(n){return String(n).padStart(2,'0');}
+// Kennung des Prüfpunkts: frei umbenennbar (pp.name), sonst automatisch „P01".
+function ppLabel(pp){return (pp.name&&pp.name.trim())?pp.name.trim():'P'+pad2(pp.nr);}
 function ppBars(pp){const s=new Set(pp.ids);return BARS.filter(b=>s.has(b.id));}
 // Die Anzahl der markierten Stäbe wird beim Anlegen festgehalten statt bei jeder
 // Anzeige neu aus BARS berechnet. Sonst steht nach dem Laden einer anderen
@@ -1687,7 +1689,7 @@ function ppStamp(ctx,c,pp){
   ctx.fillStyle=band;ctx.fillRect(0,0,W,bh);
   if(linie){ctx.fillStyle=linie;ctx.fillRect(0,bh-px,W,px);}
   ctx.fillStyle=hell?'#0069a8':'#00c8ff';ctx.font='700 '+Math.round(30*s)+'px Arial,sans-serif';
-  const nr='P'+pad2(pp.nr);
+  const nr=ppLabel(pp);
   ctx.fillText(nr,Math.round(16*s),bh/2);
   const nw=ctx.measureText(nr).width;
   ctx.fillStyle=hell?'#0b1220':'#ffffff';ctx.font='700 '+Math.round(25*s)+'px Arial,sans-serif';
@@ -1710,7 +1712,7 @@ function ppNew(){
   const ids=[...marked],idSet=new Set(ids);
   ppSeq++;
   const pp={
-    nr:ppSeq,titel:'',ids,anzahl:stabanzahl(BARS.filter(b=>idSet.has(b.id))),objekte:ids.length,datei:fname,
+    nr:ppSeq,name:'',titel:'',ids,anzahl:stabanzahl(BARS.filter(b=>idSet.has(b.id))),objekte:ids.length,datei:fname,
     guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
     view:null,bildRaw:null,bildW:0,bildH:0,attrKeys:null,
     kriterien:[],
@@ -1730,7 +1732,7 @@ function ppNew(){
   PP.push(pp);
   ppClearMarks();
   ppOpen(pp);
-  toast('Prüfpunkt P'+pp.nr+' angelegt · Tab „Abnahme"');
+  toast('Prüfpunkt '+ppLabel(pp)+' angelegt · Tab „Abnahme"');
 }
 
 // Markierung zurücksetzen, Gruppenfilter des Viewers aber beibehalten
@@ -1776,7 +1778,7 @@ function ppRenderList(){
     if(st.key==='io')io++;else if(st.key==='nio')nio++;else off++;
     const it=document.createElement('div');
     it.className='pp-item'+(ppCur===pp?' active':'');
-    it.innerHTML='<span class="pp-nr">P'+pp.nr+'</span>'
+    it.innerHTML='<span class="pp-nr" title="'+esc(ppLabel(pp))+'">'+esc(ppLabel(pp))+'</span>'
       +(pp.bildRaw?'<img class="pp-thumb" src="'+pp.bildRaw+'" alt="">':'<div class="pp-thumb"></div>')
       +'<div style="flex:1;min-width:0">'
       +'<div style="font-size:15px;color:var(--text-strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
@@ -1798,7 +1800,8 @@ function ppOpen(pp){
   ppCur=pp;
   document.getElementById('ppEmpty').style.display='none';
   document.getElementById('ppForm').style.display='block';
-  document.getElementById('ppNr').textContent='P'+pp.nr;
+  const nrEl=document.getElementById('ppNr');
+  nrEl.value=pp.name||'';nrEl.placeholder='P'+pad2(pp.nr);
   document.getElementById('ppTitel').value=pp.titel||'';
   const sub=document.getElementById('ppSub');
   sub.textContent=ppAnzahl(pp)+' Stäbe · Pos. '+(ppPosLabel(pp)||'–')+' · angelegt '+pp.zeit;
@@ -2001,7 +2004,7 @@ async function ppPDF(pp){
   d.setFont('helvetica','bold');d.setFontSize(15);d.setTextColor(20);
   d.text('Bewehrungsüberprüfung',L,y);y+=6.5;
   d.setFontSize(11);d.setTextColor(0,120,170);
-  d.text('Prüfpunkt P'+pad2(pp.nr)+(pp.titel?'  ·  '+pp.titel:''),L,y);y+=3;
+  d.text('Prüfpunkt '+ppLabel(pp)+(pp.titel?'  ·  '+pp.titel:''),L,y);y+=3;
   d.setDrawColor(150);d.setLineWidth(.4);d.line(L,y,R,y);y+=6;
 
   const rows=[['Bauvorhaben',HD.bv],['Bauteil',HD.bt],['Achse / Abschnitt',HD.ac],
@@ -2132,15 +2135,15 @@ async function ppPDF(pp){
   for(let p=1;p<=n;p++){
     d.setPage(p);
     d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(150);
-    d.text('P'+pad2(pp.nr)+(pp.titel?' · '+pp.titel:'')+'   ·   erzeugt '+new Date().toLocaleString('de-DE'),L,289);
+    d.text(ppLabel(pp)+(pp.titel?' · '+pp.titel:'')+'   ·   erzeugt '+new Date().toLocaleString('de-DE'),L,289);
     d.text('Seite '+p+'/'+n,R-14,289);
   }
   return d;
 }
 
 function ppFileBase(pp){
-  const s=slug(pp.titel);
-  return 'P'+pad2(pp.nr)+(s?'_'+s:'');
+  const k=slug(ppLabel(pp))||('P'+pad2(pp.nr)),s=slug(pp.titel);
+  return k+(s?'_'+s:'');
 }
 
 // ── Protokoll als PNG ───────────────────────────────────────────────────────
@@ -2184,7 +2187,7 @@ async function ppProtokollPNG(pp){
   // Kopf
   font(30,true);x.fillStyle=C.ink;x.fillText('Bewehrungsüberprüfung',m,y+8);y+=40;
   font(20,true);x.fillStyle=C.sub;
-  x.fillText('Prüfpunkt P'+pad2(pp.nr)+(pp.titel?'  ·  '+pp.titel:''),m,y);y+=14;
+  x.fillText('Prüfpunkt '+ppLabel(pp)+(pp.titel?'  ·  '+pp.titel:''),m,y);y+=14;
   x.strokeStyle='#9aa5b5';x.lineWidth=1.4;x.beginPath();x.moveTo(m,y);x.lineTo(R,y);x.stroke();y+=26;
 
   // Kopfdaten, zwei Spalten
@@ -2289,7 +2292,7 @@ async function ppProtokollPNG(pp){
   y+=10;
   x.strokeStyle=C.line;x.lineWidth=1;x.beginPath();x.moveTo(m,y);x.lineTo(R,y);x.stroke();y+=20;
   font(12);x.fillStyle=C.lbl;
-  x.fillText('P'+pad2(pp.nr)+(pp.titel?' · '+pp.titel:'')+'   ·   erzeugt '+new Date().toLocaleString('de-DE'),m,y);
+  x.fillText(ppLabel(pp)+(pp.titel?' · '+pp.titel:'')+'   ·   erzeugt '+new Date().toLocaleString('de-DE'),m,y);
   y+=m;
 
   // auf genutzte Höhe zuschneiden
@@ -2355,7 +2358,7 @@ function ppCSV(){
   PP.forEach(pp=>{
     const soll=ppAnzahl(pp);
     const map={};(pp.kriterien||[]).forEach(k=>{map[k.text]=k.status==='io'?'i.O.':k.status==='nio'?'n.i.O.':k.status==='nz'?'n.z.':'';});
-    lines.push(['P'+pad2(pp.nr),pp.titel||'',ppPosLabel(pp),ppObjekte(pp),soll,
+    lines.push([ppLabel(pp),pp.titel||'',ppPosLabel(pp),ppObjekte(pp),soll,
       pp.ist!==undefined?pp.ist:'',pp.ist!==undefined?pp.ist-soll:'',
       pp.kommentar||'',pp.zeit,...kritCols.map(c=>map[c]||'')]);
   });
@@ -2364,6 +2367,11 @@ function ppCSV(){
 
 // ── Ereignisse ──────────────────────────────────────────────────────────────
 document.getElementById('mpPP').addEventListener('click',ppNew);
+document.getElementById('ppNr').addEventListener('input',e=>{
+  if(!ppCur)return;
+  ppCur.name=e.target.value;
+  ppRenderList();
+});
 document.getElementById('ppTitel').addEventListener('input',e=>{
   if(!ppCur)return;
   ppCur.titel=e.target.value;
@@ -2613,7 +2621,7 @@ function saveStichprobe(status){
   ppSeq++;
   const posLbl=zaehlung.map(z=>z.pos).join(', ');
   const pp={
-    nr:ppSeq,
+    nr:ppSeq,name:'',
     titel:'Stichprobe '+(posLbl.length>34?posLbl.slice(0,32)+'…':posLbl),
     ids,anzahl:stabanzahl(BARS.filter(b=>idSet.has(b.id))),objekte:ids.length,datei:fname,
     guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
@@ -2638,7 +2646,7 @@ function saveStichprobe(status){
   document.getElementById('stichModal').style.display='none';
   ppClearMarks();
   ppOpen(pp);
-  toast('Stichprobe → Prüfpunkt P'+pp.nr+' ('+zaehlung.length+' Pos.)');
+  toast('Stichprobe → Prüfpunkt '+ppLabel(pp)+' ('+zaehlung.length+' Pos.)');
 }
 document.getElementById('stichClose').addEventListener('click',()=>document.getElementById('stichModal').style.display='none');
 document.getElementById('mpStich').addEventListener('click',openStichprobe);
@@ -3161,12 +3169,16 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.1';
+const APP_VERSION='3.2';
 const APP_CHANGELOG=[
+  {v:'3.2', date:'2026-07-24', notes:[
+    'Prüfpunkt-Kennung (P1, P2 …) ist jetzt frei umbenennbar – das Feld links neben der Bezeichnung; leer bedeutet automatisch „P01". Die Kennung erscheint in Liste, PDF, PNG, CSV und im Dateinamen',
+  ]},
   {v:'3.1', date:'2026-07-24', notes:[
     'Prüfkriterien: Spalte „n.z." entfernt – es bleiben i.O. und n.i.O. (Oberfläche, PDF und PNG)',
   ]},
