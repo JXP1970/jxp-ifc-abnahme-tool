@@ -406,9 +406,9 @@ select.sb-inp{appearance:none}
         <!-- Soll / Ist -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
           <div style="background:var(--card);border:1px solid var(--border);border-radius:7px;padding:12px">
-            <div class="hd-lbl">Soll (markierte Stäbe)</div>
+            <div class="hd-lbl">Soll (Stabanzahl)</div>
             <div style="font-size:39px;font-weight:700;color:var(--text-strong)" id="ppSoll">–</div>
-            <div style="font-size:15px;color:var(--muted)">Stäbe · BarCount lt. IFC: <span id="ppBarCnt">–</span></div>
+            <div style="font-size:15px;color:var(--muted)">Stäbe · aus <span id="ppObj">–</span> markierten Objekten</div>
           </div>
           <div style="background:var(--card);border:1px solid var(--border);border-radius:7px;padding:12px">
             <div class="hd-lbl">Ist (vor Ort)</div>
@@ -1413,18 +1413,6 @@ function dlIFC(){
 }
 
 // Soll-Stückzahl = Anzahl der tatsächlich ausgewählten Stab-Objekte.
-// Frühere Fassung summierte BarCount über alle Objekte. Das quadriert, sobald
-// jedes Objekt ein Einzelstab ist und BarCount die Verlegemenge der ganzen
-// Position trägt: 6 Stäbe mit BarCount 6 ergaben ein "Soll" von 36.
-// Die Objektanzahl ist aus der Geometrie belegbar; BarCount wird daneben
-// unverändert als IFC-Attribut ausgewiesen.
-function sollStk(bars){return bars.length;}
-// BarCount laut IFC – zur Gegenkontrolle, nicht als Soll verwendet
-function barCountAttr(bars){
-  const v=new Set();
-  bars.forEach(b=>{const n=parseFloat(b.props['BarCount']||b.props['Stabanzahl_Verlegung']);if(!isNaN(n))v.add(Math.round(n));});
-  return v.size?[...v].sort((a,b)=>a-b).join(' / '):'–';
-}
 function getSollDm(bars){
   for(const b of bars){
     const sd=parseFloat(b.props['Stabdurchmesser']);if(!isNaN(sd)&&sd>0)return Math.round(sd);
@@ -1454,7 +1442,24 @@ function ppBars(pp){const s=new Set(pp.ids);return BARS.filter(b=>s.has(b.id));}
 // Anzeige neu aus BARS berechnet. Sonst steht nach dem Laden einer anderen
 // IFC-Datei überall 0, weil die Stab-IDs dann nicht mehr auffindbar sind –
 // auch im bereits erzeugten Protokoll.
-function ppAnzahl(pp){return pp.anzahl!==undefined?pp.anzahl:(pp.ids?pp.ids.length:0);}
+// Stabanzahl einer Auswahl – identisch zur Berechnung im Markierungsfenster:
+// Summe von BarCount, ersatzweise Stabanzahl_Verlegung, sonst die Objektzahl.
+// Ein markiertes Objekt steht in der Regel für mehrere Stäbe (Verlegung).
+function stabanzahl(bars){
+  let bc=0,sv=0;
+  for(const b of bars){
+    const c=parseFloat(b.props['BarCount']);if(!isNaN(c))bc+=c;
+    const s=parseFloat(b.props['Stabanzahl_Verlegung']);if(!isNaN(s))sv+=s;
+  }
+  return Math.round(bc||sv||bars.length);
+}
+// Soll = die beim Anlegen festgehaltene Stabanzahl (überlebt einen Dateiwechsel).
+function ppAnzahl(pp){
+  if(pp.anzahl!==undefined)return pp.anzahl;
+  return pp.ids?stabanzahl(ppBars(pp)):0;
+}
+// Zahl der markierten Objekte (zur Einordnung, i.d.R. < Stabanzahl)
+function ppObjekte(pp){return pp.objekte!==undefined?pp.objekte:(pp.ids?pp.ids.length:0);}
 // Gehört der Prüfpunkt noch zur geladenen Datei?
 function ppFremd(pp){return !!(pp.datei&&fname&&pp.datei!==fname);}
 function ppPosLabel(pp){
@@ -1628,7 +1633,7 @@ function ppNew(){
   const ids=[...marked],idSet=new Set(ids);
   ppSeq++;
   const pp={
-    nr:ppSeq,titel:'',ids,anzahl:ids.length,datei:fname,
+    nr:ppSeq,titel:'',ids,anzahl:stabanzahl(BARS.filter(b=>idSet.has(b.id))),objekte:ids.length,datei:fname,
     guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
     view:null,bildRaw:null,bildW:0,bildH:0,attrKeys:null,
     kriterien:kritTpl.map(t=>({text:t,status:''})),
@@ -1724,7 +1729,7 @@ function ppOpen(pp){
   const img=document.getElementById('ppBild');
   if(pp.bildRaw){img.src=pp.bildRaw;img.style.display='block';}else img.style.display='none';
   document.getElementById('ppSoll').textContent=ppAnzahl(pp);
-  document.getElementById('ppBarCnt').textContent=barCountAttr(ppBars(pp));
+  document.getElementById('ppObj').textContent=ppObjekte(pp);
   document.getElementById('ppIst').value=pp.ist!==undefined?pp.ist:'';
   document.getElementById('ppKomm').value=pp.kommentar||'';
   const fi=document.getElementById('ppFotoImg');
@@ -1940,15 +1945,15 @@ async function ppPDF(pp){
   const soll=ppAnzahl(pp),diff=pp.ist!==undefined?pp.ist-soll:null;
   need(14);
   d.setFont('helvetica','normal');d.setFontSize(7.2);d.setTextColor(135);
-  d.text('SOLL (MARKIERTE STÄBE)',L,y);d.text('IST (VOR ORT)',L+45,y);d.text('DIFFERENZ',L+80,y);
-  d.text('BARCOUNT LT. IFC',L+114,y);
+  d.text('SOLL (STABANZAHL)',L,y);d.text('IST (VOR ORT)',L+45,y);d.text('DIFFERENZ',L+80,y);
+  d.text('MARKIERTE OBJEKTE',L+114,y);
   d.setFont('helvetica','bold');d.setFontSize(13);d.setTextColor(20);
   d.text(String(soll),L,y+6);
   d.text(pp.ist!==undefined?String(pp.ist):'–',L+45,y+6);
   if(diff!==null&&diff!==0)d.setTextColor(190,40,40);
   d.text(diff===null?'–':(diff>0?'+':'')+diff,L+80,y+6);
   d.setTextColor(20);
-  d.text(barCountAttr(ppBars(pp)),L+114,y+6);
+  d.text(String(ppObjekte(pp)),L+114,y+6);
   y+=13;
 
   const ad=ppAttrData(pp);
@@ -2101,12 +2106,12 @@ async function ppExportZip(){
 function ppCSV(){
   const kritCols=[];
   PP.forEach(pp=>(pp.kriterien||[]).forEach(k=>{if(k.text&&!kritCols.includes(k.text))kritCols.push(k.text);}));
-  const head=['Prüfpunkt','Bezeichnung','Positionen','Stäbe','Soll','Ist','Differenz','Kommentar','Angelegt',...kritCols];
+  const head=['Prüfpunkt','Bezeichnung','Positionen','Markierte Objekte','Soll Stabanzahl','Ist','Differenz','Kommentar','Angelegt',...kritCols];
   const lines=[head];
   PP.forEach(pp=>{
     const soll=ppAnzahl(pp);
     const map={};(pp.kriterien||[]).forEach(k=>{map[k.text]=k.status==='io'?'i.O.':k.status==='nio'?'n.i.O.':k.status==='nz'?'n.z.':'';});
-    lines.push(['P'+pad2(pp.nr),pp.titel||'',ppPosLabel(pp),ppAnzahl(pp),soll,
+    lines.push(['P'+pad2(pp.nr),pp.titel||'',ppPosLabel(pp),ppObjekte(pp),soll,
       pp.ist!==undefined?pp.ist:'',pp.ist!==undefined?pp.ist-soll:'',
       pp.kommentar||'',pp.zeit,...kritCols.map(c=>map[c]||'')]);
   });
@@ -2259,7 +2264,7 @@ function openStichprobe(){
   const INP='width:100%;background:var(--card);border:1px solid var(--border);border-radius:4px;'
     +'padding:7px 8px;font-family:inherit;font-size:22.5px;font-weight:700;text-align:center;outline:none;-webkit-appearance:none';
   for(const pos of keys){
-    const soll=sollStk(groups[pos]),sollDm=getSollDm(groups[pos]),saved=protokoll[pos]||{};
+    const soll=stabanzahl(groups[pos]),sollDm=getSollDm(groups[pos]),saved=protokoll[pos]||{};
     const dmLabel=sollDm!==null?'Soll: '+soll+' Stäbe · Ø '+sollDm+' mm':'Soll: '+soll+' Stäbe · Ø –';
     const row=document.createElement('div');
     row.style.cssText='background:var(--card);border:1px solid var(--border);border-radius:7px;padding:10px 12px';
@@ -2338,7 +2343,7 @@ function saveStichprobe(status){
   const pp={
     nr:ppSeq,
     titel:'Stichprobe '+(posLbl.length>34?posLbl.slice(0,32)+'…':posLbl),
-    ids,anzahl:ids.length,datei:fname,
+    ids,anzahl:stabanzahl(BARS.filter(b=>idSet.has(b.id))),objekte:ids.length,datei:fname,
     guids:BARS.filter(b=>idSet.has(b.id)).map(b=>b.guid),
     view:ppView(),bildRaw:null,bildW:0,bildH:0,attrKeys:null,
     kriterien:[
@@ -2876,12 +2881,18 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.3';
+const APP_VERSION='2.4';
 const APP_CHANGELOG=[
+  {v:'2.4', date:'2026-07-24', notes:[
+    'Soll ist jetzt die Stabanzahl (Summe BarCount) wie im Markierungsfenster, nicht mehr die Zahl der markierten Objekte – ein Objekt steht meist für mehrere verlegte Stäbe (z.B. 2 Objekte = 27 Stäbe)',
+    'Nebenzeile und PDF weisen die Zahl der markierten Objekte zur Einordnung getrennt aus',
+    'Auch die Stichprobe rechnet je Position mit der Stabanzahl statt der Objektzahl',
+  ]},
   {v:'2.3', date:'2026-07-23', notes:[
     'Soll: die Anzahl der markierten Stäbe wird beim Anlegen des Prüfpunkts festgehalten statt bei jeder Anzeige neu aus der Datei ermittelt',
     'Dadurch behoben: nach dem Laden einer anderen IFC-Datei stand bei allen Prüfpunkten „Soll 0" – auch im bereits erzeugten Protokoll',
