@@ -371,7 +371,7 @@ select.sb-inp{appearance:none}
           <option value="hell">hell – für Ausdruck und Dalux</option>
           <option value="dunkel">dunkel – wie bisher</option>
         </select>
-        <button class="btn btn-p" id="ppExpZip" style="width:100%;padding:7px">⬇ Dalux-Paket (ZIP)</button>
+        <button class="btn btn-p" id="ppExpZip" style="width:100%;padding:7px" title="Je Prüfpunkt Protokoll-PNG + PDF, gebündelt als ZIP">⬇ Dalux-Paket (ZIP)</button>
         <button class="btn btn-s" id="ppExpCSV" style="width:100%;padding:7px">⬇ CSV</button>
       </div>
     </div>
@@ -465,9 +465,12 @@ select.sb-inp{appearance:none}
         </div>
 
         <!-- Export -->
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px">
-          <button class="btn btn-p" id="ppExpPDF" style="flex:1;min-width:120px;padding:11px;font-size:18px;touch-action:manipulation">⬇ PDF</button>
-          <button class="btn btn-s" id="ppExpPNG" style="flex:1;min-width:120px;padding:11px;font-size:18px;touch-action:manipulation">⬇ Screenshot</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+          <button class="btn btn-p" id="ppExpProtPNG" style="flex:1;min-width:150px;padding:11px;font-size:18px;touch-action:manipulation" title="Komplettes Protokoll als Bild – für die Dalux-Checkliste">⬇ Protokoll (PNG)</button>
+          <button class="btn btn-s" id="ppExpPDF" style="flex:1;min-width:120px;padding:11px;font-size:18px;touch-action:manipulation">⬇ PDF</button>
+        </div>
+        <div style="display:flex;margin-bottom:24px">
+          <button class="btn btn-s" id="ppExpPNG" style="flex:1;padding:8px;font-size:15px;touch-action:manipulation" title="Nur das Modellbild">⬇ Nur Modellbild</button>
         </div>
       </div>
     </div>
@@ -2082,6 +2085,171 @@ function ppFileBase(pp){
   return 'P'+pad2(pp.nr)+(s?'_'+s:'');
 }
 
+// ── Protokoll als PNG ───────────────────────────────────────────────────────
+// Dalux annotiert Anhänge nur als Bild. Deshalb wird hier dasselbe Protokoll wie
+// im PDF direkt auf ein Canvas gezeichnet und als PNG ausgegeben. Höhe wächst mit
+// dem Inhalt; am Ende wird auf die genutzte Höhe zugeschnitten.
+async function ppProtokollPNG(pp){
+  const voll=document.getElementById('ppBoxMode').value==='voll';
+  const load=src=>new Promise(res=>{if(!src)return res(null);const im=new Image();im.onload=()=>res(im);im.onerror=()=>res(null);im.src=src;});
+  const modell=await load(await ppStamped(pp));
+  const foto=await load(pp.foto);
+
+  const W=1240,m=52,cw=W-2*m,R=W-m;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=5200;
+  const x=cv.getContext('2d');
+  x.fillStyle='#ffffff';x.fillRect(0,0,W,cv.height);
+  x.textBaseline='alphabetic';
+  let y=m;
+
+  const C={ink:'#111827',sub:'#0069a8',lbl:'#6b7280',val:'#111827',line:'#c3ccdb',
+           soll:'#4b5563',box:'#5a6472',ok:'#0a7a3d',nio:'#c0263f',warn:'#a35c00',cardBg:'#f5f7fa'};
+  const font=(px,bold)=>{x.font=(bold?'700 ':'')+px+'px Arial,Helvetica,sans-serif';};
+  function wrap(text,maxw,px){
+    font(px);const words=String(text).split(/\s+/),lines=[];let ln='';
+    for(const w of words){const t=ln?ln+' '+w:w;if(x.measureText(t).width>maxw&&ln){lines.push(ln);ln=w;}else ln=t;}
+    if(ln)lines.push(ln);return lines;
+  }
+  function checkbox(bx,by,s,checked,type){
+    x.strokeStyle=C.box;x.lineWidth=1.5;x.strokeRect(bx,by,s,s);
+    if(!checked)return;
+    x.lineWidth=3;x.lineCap='round';
+    if(type==='x'){x.strokeStyle=C.nio;x.beginPath();x.moveTo(bx+4,by+4);x.lineTo(bx+s-4,by+s-4);x.moveTo(bx+s-4,by+4);x.lineTo(bx+4,by+s-4);x.stroke();}
+    else{x.strokeStyle=C.ok;x.beginPath();x.moveTo(bx+4,by+s*.55);x.lineTo(bx+s*.42,by+s-4);x.lineTo(bx+s-4,by+4);x.stroke();}
+    x.lineCap='butt';
+  }
+  function sectionTitle(t){
+    y+=8;font(19,true);x.fillStyle=C.ink;x.fillText(t,m,y);y+=8;
+    x.strokeStyle=C.line;x.lineWidth=1;x.beginPath();x.moveTo(m,y);x.lineTo(R,y);x.stroke();y+=20;
+  }
+
+  // Kopf
+  font(30,true);x.fillStyle=C.ink;x.fillText('Bewehrungsabnahme – Prüfprotokoll',m,y+8);y+=40;
+  font(20,true);x.fillStyle=C.sub;
+  x.fillText('Prüfpunkt P'+pad2(pp.nr)+(pp.titel?'  ·  '+pp.titel:''),m,y);y+=14;
+  x.strokeStyle='#9aa5b5';x.lineWidth=1.4;x.beginPath();x.moveTo(m,y);x.lineTo(R,y);x.stroke();y+=26;
+
+  // Kopfdaten, zwei Spalten
+  const felder=[['Bauvorhaben',HD.bv],['Bauteil',HD.bt],['Achse / Abschnitt',HD.ac],
+    ['Prüfer',HD.pr],['Firma',HD.fa],['Datum',hdDatum()],
+    ['IFC-Datei',pp.datei||fname],['Positionen',ppPosLabel(pp)]];
+  for(let i=0;i<felder.length;i+=2){
+    for(let cIdx=0;cIdx<2;cIdx++){
+      const f=felder[i+cIdx];if(!f)continue;
+      const fx=m+cIdx*(cw/2);
+      font(13);x.fillStyle=C.lbl;x.fillText(String(f[0]).toUpperCase(),fx,y);
+      font(18,true);x.fillStyle=C.val;x.fillText(String(f[1]||'–').slice(0,46),fx,y+22);
+    }
+    y+=48;
+  }
+  y+=6;
+
+  // Modellbild
+  if(modell){
+    let iw=cw,ih=cw*modell.naturalHeight/modell.naturalWidth;
+    const maxH=560;if(ih>maxH){ih=maxH;iw=maxH*modell.naturalWidth/modell.naturalHeight;}
+    x.drawImage(modell,m,y,iw,ih);
+    x.strokeStyle=C.line;x.lineWidth=1;x.strokeRect(m,y,iw,ih);
+    y+=ih+22;
+  }
+
+  // Kennzahlen
+  const soll=ppAnzahl(pp),diff=pp.ist!==undefined?pp.ist-soll:null;
+  const kz=[['SOLL (STABANZAHL)',String(soll),C.val],
+            ['IST (VOR ORT)',pp.ist!==undefined?String(pp.ist):'–',C.val],
+            ['DIFFERENZ',diff===null?'–':(diff>0?'+':'')+diff,diff&&diff!==0?C.nio:C.val],
+            ['MARKIERTE OBJEKTE',String(ppObjekte(pp)),C.val]];
+  const bw=(cw-3*12)/4,bh=76;
+  kz.forEach((k,i)=>{
+    const bx=m+i*(bw+12);
+    x.fillStyle=C.cardBg;x.strokeStyle=C.line;x.lineWidth=1;
+    x.fillRect(bx,y,bw,bh);x.strokeRect(bx,y,bw,bh);
+    font(12);x.fillStyle=C.lbl;x.fillText(k[0],bx+12,y+22);
+    font(30,true);x.fillStyle=k[2];x.fillText(k[1],bx+12,y+58);
+  });
+  y+=bh+24;
+
+  // Prüfkriterien
+  const bs=26,cb3=R-bs,cb2=cb3-64,cb1=cb2-64,sollR=cb1-24;
+  sectionTitle('Prüfkriterien');
+  font(12);x.fillStyle=C.lbl;
+  x.textAlign='center';
+  x.fillText('i.O.',cb1+bs/2,y-6);x.fillText('n.i.O.',cb2+bs/2,y-6);x.fillText('n.z.',cb3+bs/2,y-6);
+  x.textAlign='right';x.fillText('SOLL',sollR,y-6);
+  x.textAlign='left';
+  y+=16;
+  const krit=pp.kriterien||[];
+  if(!krit.length){font(15);x.fillStyle=C.lbl;x.fillText('– keine Kriterien hinterlegt –',m,y+8);y+=26;}
+  for(const k of krit){
+    font(16);x.fillStyle=C.ink;x.textAlign='left';
+    x.fillText(String(k.text||'').slice(0,52),m,y+4);
+    if(k.soll){font(15);x.fillStyle=C.soll;x.textAlign='right';x.fillText(String(k.soll).slice(0,24),sollR,y+4);x.textAlign='left';}
+    checkbox(cb1,y-16,bs,voll&&k.status==='io','check');
+    checkbox(cb2,y-16,bs,voll&&k.status==='nio','x');
+    checkbox(cb3,y-16,bs,voll&&k.status==='nz','check');
+    x.strokeStyle='#e6eaf0';x.lineWidth=1;x.beginPath();x.moveTo(m,y+16);x.lineTo(R,y+16);x.stroke();
+    y+=34;
+  }
+  y+=6;
+
+  // Stichprobe je Position (falls vorhanden)
+  if(pp.zaehlung&&pp.zaehlung.length){
+    sectionTitle('Stichprobe je Position');
+    font(12);x.fillStyle=C.lbl;
+    x.fillText('POSITION',m,y-6);x.fillText('SOLL STK',m+260,y-6);x.fillText('IST STK',m+400,y-6);
+    x.fillText('SOLL Ø',m+540,y-6);x.fillText('IST Ø',m+680,y-6);
+    for(const z of pp.zaehlung){
+      font(15);x.fillStyle=C.ink;
+      x.fillText(String(z.pos).slice(0,28),m,y+4);
+      x.fillText(z.soll!==undefined?String(z.soll):'–',m+260,y+4);
+      x.fillText(z.ist!==undefined?String(z.ist):'–',m+400,y+4);
+      x.fillText(z.sollDm!==undefined?String(z.sollDm):'–',m+540,y+4);
+      x.fillText(z.istDm!==undefined?String(z.istDm):'–',m+680,y+4);
+      y+=28;
+    }
+    y+=8;
+  }
+
+  // Bemerkung
+  if(pp.kommentar){
+    sectionTitle('Bemerkung');
+    font(16);x.fillStyle='#2b3442';
+    for(const ln of wrap(pp.kommentar,cw,16)){x.fillText(ln,m,y);y+=24;}
+    y+=8;
+  }
+
+  // Baustellenfoto
+  if(foto){
+    sectionTitle('Baustellenfoto');
+    let iw=cw*.62,ih=iw*foto.naturalHeight/foto.naturalWidth;
+    const maxH=460;if(ih>maxH){ih=maxH;iw=maxH*foto.naturalWidth/foto.naturalHeight;}
+    x.drawImage(foto,m,y,iw,ih);
+    x.strokeStyle=C.line;x.lineWidth=1;x.strokeRect(m,y,iw,ih);
+    y+=ih+22;
+  }
+
+  // Unterschriften
+  y+=30;
+  x.strokeStyle='#6b7280';x.lineWidth=1.2;
+  x.beginPath();x.moveTo(m,y);x.lineTo(m+cw*.42,y);x.stroke();
+  x.beginPath();x.moveTo(m+cw*.55,y);x.lineTo(m+cw*.97,y);x.stroke();
+  font(13);x.fillStyle=C.lbl;
+  x.fillText('Datum, Unterschrift Prüfer',m,y+20);
+  x.fillText('Datum, Unterschrift Bauleitung',m+cw*.55,y+20);
+  y+=40;
+
+  // Fußzeile
+  x.strokeStyle=C.line;x.lineWidth=1;x.beginPath();x.moveTo(m,y);x.lineTo(R,y);x.stroke();y+=20;
+  font(12);x.fillStyle=C.lbl;
+  x.fillText('P'+pad2(pp.nr)+(pp.titel?' · '+pp.titel:'')+'   ·   erzeugt '+new Date().toLocaleString('de-DE'),m,y);
+  y+=m;
+
+  // auf genutzte Höhe zuschneiden
+  const out=document.createElement('canvas');out.width=W;out.height=Math.min(y,cv.height);
+  out.getContext('2d').drawImage(cv,0,0);
+  return out.toDataURL('image/png');
+}
+
 // ── Exporte ─────────────────────────────────────────────────────────────────
 async function ppExportPDF(pp){
   const d=await ppPDF(pp);if(!d)return;
@@ -2092,8 +2260,16 @@ async function ppExportPNG(pp){
   if(!pp.bildRaw){toast('Kein Modellbild vorhanden','warn');return;}
   const s=await ppStamped(pp);
   const a=document.createElement('a');
-  a.href=s||pp.bildRaw;a.download=ppFileBase(pp)+'.png';a.click();
-  toast('Screenshot: '+ppFileBase(pp)+'.png');
+  a.href=s||pp.bildRaw;a.download=ppFileBase(pp)+'_Modell.png';a.click();
+  toast('Modellbild: '+ppFileBase(pp)+'_Modell.png');
+}
+// Komplettes Protokoll als PNG – der Anhang für die Dalux-Checkliste
+async function ppExportProtokollPNG(pp){
+  toast('Protokoll-PNG wird erzeugt …');
+  const png=await ppProtokollPNG(pp);
+  const a=document.createElement('a');
+  a.href=png;a.download=ppFileBase(pp)+'.png';a.click();
+  toast('Protokoll: '+ppFileBase(pp)+'.png');
 }
 
 async function ppExportZip(){
@@ -2102,13 +2278,13 @@ async function ppExportZip(){
   const zip=new JSZip();
   for(const pp of PP){
     const base=ppFileBase(pp);
+    // Protokoll-PNG ist der Anhang für Dalux und liegt zuerst im Paket
+    const prot=await ppProtokollPNG(pp);
+    if(prot){const m=prot.match(/^data:image\/png;base64,(.+)$/);if(m)zip.file(base+'.png',m[1],{base64:true});}
     const d=await ppPDF(pp);
     if(d)zip.file(base+'.pdf',d.output('blob'));
     const s=await ppStamped(pp);
-    if(s){
-      const m=s.match(/^data:image\/png;base64,(.+)$/);
-      if(m)zip.file(base+'.png',m[1],{base64:true});
-    }
+    if(s){const m=s.match(/^data:image\/png;base64,(.+)$/);if(m)zip.file(base+'_Modell.png',m[1],{base64:true});}
     if(pp.foto){
       const m=pp.foto.match(/^data:image\/(\w+);base64,(.+)$/);
       if(m)zip.file(base+'_Foto.'+(m[1]==='jpeg'?'jpg':m[1]),m[2],{base64:true});
@@ -2261,6 +2437,7 @@ document.getElementById('ppAttrOk').addEventListener('click',()=>{
     ppRenderAttrs();
   }
 });
+document.getElementById('ppExpProtPNG').addEventListener('click',()=>{if(ppCur)ppExportProtokollPNG(ppCur);});
 document.getElementById('ppExpPDF').addEventListener('click',()=>{if(ppCur)ppExportPDF(ppCur);});
 document.getElementById('ppExpPNG').addEventListener('click',()=>{if(ppCur)ppExportPNG(ppCur);});
 document.getElementById('ppExpZip').addEventListener('click',ppExportZip);
@@ -2272,7 +2449,7 @@ document.getElementById('ppExpCSV').addEventListener('click',()=>{
   a.click();toast('CSV exportiert');
 });
 ['mpPP','ppDel','ppViewGo','ppShot','ppKritAdd','ppKritFromAttr','ppKritFromTpl','tplAdd','ppFotoBtn',
- 'ppAttrCfg','ppAttrClose','ppAttrScopeTgl','ppAttrOk','ppExpPDF','ppExpPNG','ppExpZip','ppExpCSV'].forEach(id=>{
+ 'ppAttrCfg','ppAttrClose','ppAttrScopeTgl','ppAttrOk','ppExpProtPNG','ppExpPDF','ppExpPNG','ppExpZip','ppExpCSV'].forEach(id=>{
   const el=document.getElementById(id);if(!el)return;
   el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});
 });
@@ -2916,12 +3093,19 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='2.5';
+const APP_VERSION='2.6';
 const APP_CHANGELOG=[
+  {v:'2.6', date:'2026-07-24', notes:[
+    'Neuer Export: komplettes Prüfprotokoll als PNG-Bild („⬇ Protokoll (PNG)") – für die Dalux-Checkliste, wo Anhänge als Bild annotiert werden',
+    'Das PNG enthält Kopf, Modellbild, Soll/Ist, alle Kriterien mit Kästchen (leer oder ausgefüllt), Bemerkung, Foto und Unterschriftenfelder',
+    'Das Dalux-Paket (ZIP) enthält jetzt je Prüfpunkt das Protokoll-PNG zuerst, dazu PDF und Modellbild',
+    'Der bisherige Screenshot-Knopf liefert weiterhin nur das Modellbild („⬇ Nur Modellbild")',
+  ]},
   {v:'2.5', date:'2026-07-24', notes:[
     'Prüfkriterien entstehen jetzt automatisch aus den gewählten IFC-Attributen – je Attribut eine Zeile mit dem Soll-Wert als Referenz und Ankreuzkästchen i.O. / n.i.O. / n.z.',
     'Knopf „↺ Attribute" baut die Kriterien aus der aktuellen Attributauswahl neu auf und behält gesetzte Bewertungen; die Attributauswahl steuert damit direkt den Prüfumfang',
