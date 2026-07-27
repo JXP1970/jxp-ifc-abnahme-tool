@@ -376,6 +376,13 @@ select.sb-inp{appearance:none}
         </select>
         <button class="btn btn-p" id="ppExpZip" style="width:100%;padding:7px" title="Je Prüfpunkt Protokoll-PNG + PDF, gebündelt als ZIP">⬇ Dalux-Paket (ZIP)</button>
         <button class="btn btn-s" id="ppExpCSV" style="width:100%;padding:7px">⬇ CSV</button>
+        <hr style="border:none;border-top:1px solid var(--border);margin:3px 0">
+        <div class="hd-lbl">Abnahme sichern / laden</div>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-s" id="ppSave" style="flex:1;padding:7px" title="Alle Prüfpunkte als Datei speichern – zum Weiterarbeiten auf einem anderen Gerät">💾 Sichern</button>
+          <button class="btn btn-s" id="ppLoad" style="flex:1;padding:7px" title="Gespeicherte Abnahme-Datei einlesen">📂 Laden</button>
+        </div>
+        <input type="file" accept=".json,application/json" id="ppLoadFile" style="display:none">
       </div>
     </div>
 
@@ -1486,8 +1493,14 @@ function ppObjekte(pp){return pp.objekte!==undefined?pp.objekte:(pp.ids?pp.ids.l
 // Gehört der Prüfpunkt noch zur geladenen Datei?
 function ppFremd(pp){return !!(pp.datei&&fname&&pp.datei!==fname);}
 function ppPosLabel(pp){
-  const s=new Set();ppBars(pp).forEach(b=>s.add(grp(b)));
-  return [...s].sort((a,b)=>{const an=parseInt(a),bn=parseInt(b);return isNaN(an)||isNaN(bn)?String(a).localeCompare(b):an-bn;}).join(', ');
+  const bars=ppBars(pp);
+  if(bars.length){
+    const s=new Set();bars.forEach(b=>s.add(grp(b)));
+    const r=[...s].sort((a,b)=>{const an=parseInt(a),bn=parseInt(b);return isNaN(an)||isNaN(bn)?String(a).localeCompare(b):an-bn;}).join(', ');
+    pp.posLabel=r;   // für spätere Verwendung ohne geladene IFC merken (Sichern/Laden)
+    return r;
+  }
+  return pp.posLabel||'';   // IFC nicht geladen → gespeicherte Bezeichnung
 }
 function slug(s){return String(s||'').replace(/[^\wäöüÄÖÜß\- ]+/g,'').trim().replace(/\s+/g,'-').slice(0,40);}
 function hdDatum(){return HD.dt?new Date(HD.dt).toLocaleDateString('de-DE'):new Date().toLocaleDateString('de-DE');}
@@ -2300,6 +2313,61 @@ async function ppProtokollPNG(pp){
   out.getContext('2d').drawImage(cv,0,0);
   return out.toDataURL('image/png');
 }
+
+// ── Abnahme sichern / laden ─────────────────────────────────────────────────
+// Die komplette Abnahme wird als eine JSON-Datei gespeichert (inkl. Modellbilder
+// und Fotos), damit sie auf einem anderen Gerät weiterbearbeitet werden kann.
+// Sets werden dafür in Arrays umgewandelt und beim Laden zurückgewandelt.
+function ppSaveState(){
+  PP.forEach(pp=>ppPosLabel(pp));   // Positions-Bezeichnung sicher hinterlegen
+  return JSON.stringify({
+    app:'jxp-ifc-abnahme', ver:APP_VERSION, saved:new Date().toISOString(),
+    HD:{...HD}, kritTpl:[...kritTpl], ppSeq,
+    protoAttrKeys: protoAttrKeys?[...protoAttrKeys]:null,
+    protoAttrSum:[...protoAttrSum],
+    PP: PP.map(pp=>Object.assign({},pp,{attrKeys: pp.attrKeys?[...pp.attrKeys]:null}))
+  });
+}
+function ppLoadState(text){
+  const d=JSON.parse(text);
+  if(!d||d.app!=='jxp-ifc-abnahme')throw new Error('Keine gültige Abnahme-Datei');
+  Object.assign(HD,{bv:'',bt:'',ac:'',pr:'',fa:'',dt:''},d.HD||{});
+  kritTpl=Array.isArray(d.kritTpl)?d.kritTpl:[];
+  ppSeq=d.ppSeq||0;
+  protoAttrKeys=d.protoAttrKeys?new Set(d.protoAttrKeys):null;
+  protoAttrSum=new Set(d.protoAttrSum||['Masse','BarWeightTotal']);
+  PP.length=0;
+  for(const p of (d.PP||[])){p.attrKeys=p.attrKeys?new Set(p.attrKeys):null;PP.push(p);}
+  // Oberfläche auffrischen
+  for(const k of Object.keys(HD)){const el=document.querySelector('[data-hd="'+k+'"]');if(el)el.value=HD[k]||'';}
+  tplRender();ppSaveSettings();
+  ppCur=null;
+  document.getElementById('ppForm').style.display='none';
+  document.getElementById('ppEmpty').style.display='flex';
+  ppRenderList();
+  return PP.length;
+}
+document.getElementById('ppSave').addEventListener('click',()=>{
+  if(!PP.length){toast('Keine Prüfpunkte zum Sichern','warn');return;}
+  const name='Abnahme_'+(slug(HD.bt)||'Pruefpunkte')+'_'+new Date().toISOString().slice(0,10)+'.json';
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([ppSaveState()],{type:'application/json'}));
+  a.download=name;a.click();
+  toast('Gesichert: '+name);
+});
+document.getElementById('ppLoad').addEventListener('click',()=>document.getElementById('ppLoadFile').click());
+document.getElementById('ppLoadFile').addEventListener('change',e=>{
+  const file=e.target.files[0];if(!file)return;
+  if(PP.length&&!confirm('Aktuelle Abnahme ('+PP.length+' Prüfpunkte) durch die geladene Datei ersetzen?')){e.target.value='';return;}
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{const n=ppLoadState(ev.target.result);toast(n+' Prüfpunkte geladen');}
+    catch(err){toast('Fehler: '+err.message,'err');}
+  };
+  r.readAsText(file);
+  e.target.value='';
+});
+['ppSave','ppLoad'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',ev=>{ev.preventDefault();el.click();},{passive:false});});
 
 // ── Exporte ─────────────────────────────────────────────────────────────────
 async function ppExportPDF(pp){
@@ -3170,12 +3238,17 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.2';
+const APP_VERSION='3.3';
 const APP_CHANGELOG=[
+  {v:'3.3', date:'2026-07-24', notes:[
+    'Abnahme sichern und laden: alle Prüfpunkte (mit Modellbildern, Fotos, Kriterien und Protokollkopf) lassen sich als Datei speichern und später – auch auf einem anderen Gerät – wieder einlesen',
+    'Das gesicherte Protokoll lässt sich auf dem anderen Gerät auch ohne die IFC-Datei als PDF/PNG ausgeben; für „↗ Ansicht" und neue Aufnahmen muss dieselbe IFC geladen sein',
+  ]},
   {v:'3.2', date:'2026-07-24', notes:[
     'Prüfpunkt-Kennung (P1, P2 …) ist jetzt frei umbenennbar – das Feld links neben der Bezeichnung; leer bedeutet automatisch „P01". Die Kennung erscheint in Liste, PDF, PNG, CSV und im Dateinamen',
   ]},
