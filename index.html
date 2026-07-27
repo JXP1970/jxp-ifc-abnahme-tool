@@ -775,23 +775,23 @@ class OC{
     this._dt=0;this._dp=0;this._pan=new THREE.Vector3();
     this._t1=null;this._pd=0;
     let mb=-1,ms={x:0,y:0};
-    el.addEventListener('mousedown',e=>{if(boxMode||measureMode)return;mb=e.button;ms={x:e.clientX,y:e.clientY};});
+    el.addEventListener('mousedown',e=>{if(boxMode||measureMode||clipDragging)return;mb=e.button;ms={x:e.clientX,y:e.clientY};});
     el.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.08:0.92;this.sph.radius=Math.max(0.00001,Math.min(5000,this.sph.radius*f));this.sync();},{passive:false});
     el.addEventListener('contextmenu',e=>e.preventDefault());
     window.addEventListener('mousemove',e=>{
-      if(boxMode||measureMode)return;
+      if(boxMode||measureMode||clipDragging)return;
       if(mb===0){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._dt-=dx*0.005;this._dp-=dy*0.005;ms={x:e.clientX,y:e.clientY};}
       if(mb===2||mb===1){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._pan.add(new THREE.Vector3(-dx,dy,0).multiplyScalar(this.sph.radius*0.001).applyQuaternion(cam.quaternion));ms={x:e.clientX,y:e.clientY};}
     });
     window.addEventListener('mouseup',()=>{mb=-1;});
     let tapStart=null,tapMoved=false;
     el.addEventListener('touchstart',e=>{
-      if(boxMode||measureMode)return;
+      if(boxMode||measureMode||clipDragging)return;
       if(e.touches.length===1){this._t1={x:e.touches[0].clientX,y:e.touches[0].clientY};this._pd=0;tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};tapMoved=false;}
       else if(e.touches.length===2){const t0=e.touches[0],t1=e.touches[1];this._pd=Math.hypot(t1.clientX-t0.clientX,t1.clientY-t0.clientY);this._t1={x:(t0.clientX+t1.clientX)/2,y:(t0.clientY+t1.clientY)/2};tapStart=null;}
     },{passive:true});
     el.addEventListener('touchmove',e=>{
-      if(boxMode||measureMode)return;
+      if(boxMode||measureMode||clipDragging)return;
       e.preventDefault();
       if(e.touches.length===1&&this._pd===0){
         const t=e.touches[0];
@@ -809,7 +809,7 @@ class OC{
       }
     },{passive:false});
     el.addEventListener('touchend',e=>{
-      if(boxMode||measureMode)return;
+      if(boxMode||measureMode||clipDragging)return;
       if(e.touches.length===0){
         if(!tapMoved&&tapStart&&Date.now()-tapStart.t<300){doRaycast(tapStart.x,tapStart.y);}
         this._t1=null;this._pd=0;tapStart=null;
@@ -828,6 +828,7 @@ class OC{
 
 let BARS=[],editMap={},selId=null,fltGrp=null,srch='',fldFlt='',valFlt='',sortF='grp',sortA=true,fname='',COLS=[],rawIFC='';
 let boxMode=false,isolateMode=false,measureMode=false;
+let clipDragging=false,clipSuppressClick=false;   // Ziehen eines Schnittbox-Griffs
 let grpField='Pos_Nr.';
 function grp(b){
   if(grpField==='__type__')return b.name||'?';
@@ -976,7 +977,7 @@ function initThree(){
   const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(5,10,7);scene.add(dl);
   buildGrid();
   function rz(){const w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}}
-  function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();}
+  function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();clipTick();}
   loop();
   canvas.addEventListener('touchend',()=>{lastTouchEnd=Date.now();},{passive:true});
   // Markieren nur bei einem echten Klick, nicht am Ende eines Dreh-Zugs.
@@ -986,6 +987,7 @@ function initThree(){
   canvas.addEventListener('mousedown',e=>{downX=e.clientX;downY=e.clientY;dragged=false;});
   window.addEventListener('mousemove',e=>{if(Math.hypot(e.clientX-downX,e.clientY-downY)>5)dragged=true;});
   canvas.addEventListener('click',e=>{
+    if(clipSuppressClick){clipSuppressClick=false;return;}   // war ein Griff-Klick
     if(Date.now()-lastTouchEnd<700)return;
     if(dragged||Math.hypot(e.clientX-downX,e.clientY-downY)>5)return;
     if(!boxMode)doRaycast(e.clientX,e.clientY);
@@ -1667,6 +1669,8 @@ function ppCapture(pp){
   });
   const ringVis=snapIndicatorRing&&snapIndicatorRing.visible;
   if(ringVis)snapIndicatorRing.visible=false;
+  const gizVis=clipGizmo&&clipGizmo.visible;   // Schnittbox-Griffe nicht ins Bild
+  if(gizVis)clipGizmo.visible=false;
   // Mess-Objekte im WebGL-Bild ausblenden – sie werden anschließend sauber in 2D
   // gezeichnet (Gelb wäre auf hellem Grund kaum sichtbar).
   const measHid=[];
@@ -1688,6 +1692,7 @@ function ppCapture(pp){
     p.m.material.color.setHex(p.c);p.m.material.emissive.setHex(p.e);p.m.material.emissiveIntensity=p.i;
   });
   measHid.forEach(o=>o.visible=true);
+  if(gizVis)clipGizmo.visible=true;
   scene.background=prevBg;buildGrid();
   if(ringVis)snapIndicatorRing.visible=true;
   pp.bildW=c.width;pp.bildH=c.height;
@@ -3288,7 +3293,7 @@ function clipApply(){
 }
 function clipSetBox(min,max){
   clipVal.xmin=min.x;clipVal.xmax=max.x;clipVal.ymin=min.y;clipVal.ymax=max.y;clipVal.zmin=min.z;clipVal.zmax=max.z;
-  clipUpdatePlanes();clipBuildUI();
+  clipUpdatePlanes();clipBuildUI();clipUpdateGizmo();
 }
 function clipBuildUI(){
   const c=document.getElementById('clipRows');if(!c)return;
@@ -3311,7 +3316,7 @@ function clipBuildUI(){
         const gap=rng2*0.01;
         if(end==='min'){if(v>clipVal[ax+'max']-gap)v=clipVal[ax+'max']-gap;clipVal[ax+'min']=v;}
         else{if(v<clipVal[ax+'min']+gap)v=clipVal[ax+'min']+gap;clipVal[ax+'max']=v;}
-        clipUpdatePlanes();
+        clipUpdatePlanes();clipUpdateGizmo();
       });
     });
     c.appendChild(row);
@@ -3324,15 +3329,18 @@ function clipToggle(on){
   btn.classList.toggle('ghost-on',clipOn);btn.style.opacity=clipOn?'1':'.4';
   document.getElementById('clipPanel').style.display=clipOn?'block':'none';
   if(clipOn){
+    clipEnsureGizmo();
     const b=clipModelBox();
     if(!b.isEmpty()){clipFull.min.copy(b.min);clipFull.max.copy(b.max);clipSetBox(b.min,b.max);}
   }
+  if(clipGizmo)clipGizmo.visible=clipOn;
   clipApply();
 }
 function clipDisable(){   // bei neuem Modell: Schnitt aus
   clipOn=false;
   const btn=document.getElementById('hbClip');if(btn){btn.classList.remove('ghost-on');btn.style.opacity='.4';}
   const p=document.getElementById('clipPanel');if(p)p.style.display='none';
+  if(clipGizmo)clipGizmo.visible=false;
 }
 document.getElementById('hbClip').addEventListener('click',()=>clipToggle());
 document.getElementById('hbClip').addEventListener('touchend',e=>{e.preventDefault();clipToggle();},{passive:false});
@@ -3349,6 +3357,96 @@ document.getElementById('clipToSel').addEventListener('click',()=>{
 });
 ['clipClose','clipReset','clipToSel'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
 makeDraggable(document.getElementById('clipPanel'),document.getElementById('clipHdr'));
+
+// ── Schnittbox-Gizmo: Rahmen + Griffe zum direkten Ziehen im 3D ──────────────
+let clipGizmo=null,clipBoxHelper=null;const clipHandles=[];
+let clipDragFace=null,clipDragAxis=null;const clipDragAO=new THREE.Vector3();
+function clipEnsureGizmo(){
+  if(clipGizmo||!scene)return;
+  clipGizmo=new THREE.Group();
+  clipBoxHelper=new THREE.Box3Helper(new THREE.Box3(new THREE.Vector3(-1,-1,-1),new THREE.Vector3(1,1,1)),new THREE.Color(0x1b2431));
+  clipBoxHelper.material.depthTest=false;clipBoxHelper.material.transparent=true;clipBoxHelper.material.opacity=.9;clipBoxHelper.renderOrder=990;
+  clipGizmo.add(clipBoxHelper);
+  for(const [face,axis] of [['xmin','x'],['xmax','x'],['ymin','y'],['ymax','y'],['zmin','z'],['zmax','z']]){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(1,18,12),
+      new THREE.MeshBasicMaterial({color:0xff6a00,depthTest:false,transparent:true,opacity:.95}));
+    m.renderOrder=999;m.userData={face,axis};
+    clipHandles.push(m);clipGizmo.add(m);
+  }
+  scene.add(clipGizmo);
+}
+function clipUpdateGizmo(){
+  if(!clipGizmo)return;
+  clipBoxHelper.box.set(new THREE.Vector3(clipVal.xmin,clipVal.ymin,clipVal.zmin),
+                        new THREE.Vector3(clipVal.xmax,clipVal.ymax,clipVal.zmax));
+  const cx=(clipVal.xmin+clipVal.xmax)/2,cy=(clipVal.ymin+clipVal.ymax)/2,cz=(clipVal.zmin+clipVal.zmax)/2;
+  const P={xmin:[clipVal.xmin,cy,cz],xmax:[clipVal.xmax,cy,cz],ymin:[cx,clipVal.ymin,cz],
+           ymax:[cx,clipVal.ymax,cz],zmin:[cx,cy,clipVal.zmin],zmax:[cx,cy,clipVal.zmax]};
+  const r=clipFull.min.distanceTo(clipFull.max)*0.02||0.1;   // Griffgröße relativ zur Modellgröße
+  for(const h of clipHandles){const p=P[h.userData.face];h.position.set(p[0],p[1],p[2]);h.scale.setScalar(r);}
+}
+function clipTick(){clipGizmo&&(clipGizmo.visible=clipOn);}   // Sichtbarkeit pro Frame
+function clipSyncSliders(){
+  document.querySelectorAll('#clipRows input[type=range]').forEach(inp=>{
+    const ax=inp.dataset.ax,end=inp.dataset.end,lo=clipFull.min[ax],hi=clipFull.max[ax],rng=(hi-lo)||1;
+    inp.value=Math.round((clipVal[ax+end]-lo)/rng*1000);
+  });
+}
+// Griff unter dem Zeiger finden
+function clipPick(cx,cy){
+  if(!clipOn||!clipHandles.length)return null;
+  const canvas=document.getElementById('vc'),r=canvas.getBoundingClientRect();
+  rc.setFromCamera({x:((cx-r.left)/r.width)*2-1,y:-((cy-r.top)/r.height)*2+1},camera);
+  const hits=rc.intersectObjects(clipHandles,false);
+  return hits.length?hits[0].object:null;
+}
+function clipStartDrag(h){
+  clipDragging=true;clipSuppressClick=true;
+  clipDragFace=h.userData.face;clipDragAxis=h.userData.axis;clipDragAO.copy(h.position);
+  document.getElementById('vc').style.cursor='grabbing';
+}
+function clipMoveDrag(cx,cy){
+  const canvas=document.getElementById('vc'),r=canvas.getBoundingClientRect();
+  rc.setFromCamera({x:((cx-r.left)/r.width)*2-1,y:-((cy-r.top)/r.height)*2+1},camera);
+  // Punkt auf der Achslinie durch den Griff, der dem Sehstrahl am nächsten liegt
+  const ad=new THREE.Vector3(clipDragAxis==='x'?1:0,clipDragAxis==='y'?1:0,clipDragAxis==='z'?1:0);
+  const ro=rc.ray.origin,rd=rc.ray.direction,w0=ro.clone().sub(clipDragAO);
+  const b=rd.dot(ad),d=rd.dot(w0),e=ad.dot(w0),denom=1-b*b;
+  if(Math.abs(denom)<1e-6)return;
+  const s=(e-b*d)/denom;
+  let coord=clipDragAO[clipDragAxis]+s;
+  const lo=clipFull.min[clipDragAxis],hi=clipFull.max[clipDragAxis],gap=(hi-lo)*0.02;
+  if(clipDragFace.endsWith('min'))coord=Math.min(Math.max(coord,lo),clipVal[clipDragAxis+'max']-gap);
+  else coord=Math.max(Math.min(coord,hi),clipVal[clipDragAxis+'min']+gap);
+  clipVal[clipDragFace]=coord;
+  clipUpdatePlanes();clipUpdateGizmo();clipSyncSliders();
+}
+function clipEndDrag(){clipDragging=false;clipDragFace=null;document.getElementById('vc').style.cursor='';}
+(function(){
+  const vc=document.getElementById('vc');
+  // Maus
+  vc.addEventListener('mousedown',e=>{
+    if(!clipOn||e.button!==0)return;
+    const h=clipPick(e.clientX,e.clientY);
+    if(h){e.preventDefault();clipStartDrag(h);}else clipSuppressClick=false;
+  });
+  window.addEventListener('mousemove',e=>{if(clipDragging)clipMoveDrag(e.clientX,e.clientY);});
+  window.addEventListener('mouseup',()=>{if(clipDragging)clipEndDrag();});
+  // Zeiger-Feedback beim Überfahren
+  vc.addEventListener('mousemove',e=>{if(clipOn&&!clipDragging)vc.style.cursor=clipPick(e.clientX,e.clientY)?'grab':'';});
+  // Touch
+  vc.addEventListener('touchstart',e=>{
+    if(!clipOn||e.touches.length!==1)return;
+    const t=e.touches[0],h=clipPick(t.clientX,t.clientY);
+    if(h){e.preventDefault();clipStartDrag(h);}
+  },{passive:false});
+  vc.addEventListener('touchmove',e=>{
+    if(!clipDragging||e.touches.length!==1)return;
+    e.preventDefault();const t=e.touches[0];clipMoveDrag(t.clientX,t.clientY);
+  },{passive:false});
+  vc.addEventListener('touchend',()=>{if(clipDragging)clipEndDrag();},{passive:true});
+})();
+
 
 
 
@@ -3367,8 +3465,11 @@ makeDraggable(document.getElementById('clipPanel'),document.getElementById('clip
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.4';
+const APP_VERSION='3.5';
 const APP_CHANGELOG=[
+  {v:'3.5', date:'2026-07-27', notes:[
+    'Box-Schnitt jetzt auch mit Ziehgriffen direkt im 3D: Rahmen um das Modell mit sechs orangen Griffen an den Flächen – anfassen und ziehen, um die Schnittbox aufzuziehen (zusätzlich zu den Reglern)',
+  ]},
   {v:'3.4', date:'2026-07-27', notes:[
     'Viewer: Box-Schnitt (✂) – sechs Regler (X/Y/Z je min/max) schneiden das Modell auf, sodass man in dichte Bewehrung hineinschauen kann; „Auf Auswahl" begrenzt die Box auf die markierten Stäbe',
     'Der Schnitt erscheint auch im aufgenommenen Prüfpunkt-Bild',
