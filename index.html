@@ -3382,10 +3382,23 @@ function clipUpdateGizmo(){
   const cx=(clipVal.xmin+clipVal.xmax)/2,cy=(clipVal.ymin+clipVal.ymax)/2,cz=(clipVal.zmin+clipVal.zmax)/2;
   const P={xmin:[clipVal.xmin,cy,cz],xmax:[clipVal.xmax,cy,cz],ymin:[cx,clipVal.ymin,cz],
            ymax:[cx,clipVal.ymax,cz],zmin:[cx,cy,clipVal.zmin],zmax:[cx,cy,clipVal.zmax]};
-  const r=clipFull.min.distanceTo(clipFull.max)*0.02||0.1;   // Griffgröße relativ zur Modellgröße
-  for(const h of clipHandles){const p=P[h.userData.face];h.position.set(p[0],p[1],p[2]);h.scale.setScalar(r);}
+  for(const h of clipHandles){const p=P[h.userData.face];h.position.set(p[0],p[1],p[2]);h.scale.setScalar(clipHandleR(h.position));}
 }
-function clipTick(){clipGizmo&&(clipGizmo.visible=clipOn);}   // Sichtbarkeit pro Frame
+// Griffgröße konstant ~10 px am Bildschirm (zoom-unabhängig, unabhängig von der
+// Modell-Diagonale – wichtig für lange Bauteile, wo eine diagonalbezogene Größe
+// die Griffe riesig machte). Lockere Grenzen nur als Ausreißerschutz.
+function clipHandleR(pt){
+  const diag=clipFull.min.distanceTo(clipFull.max)||1;
+  let w=measWorldSize(pt,10);
+  if(!isFinite(w)||w<=0)w=diag*0.006;
+  return Math.min(Math.max(w,diag*0.0015),diag*0.06);
+}
+function clipTick(){   // pro Frame: Sichtbarkeit + Griffe auf konstanter Bildschirmgröße halten
+  if(!clipGizmo)return;
+  clipGizmo.visible=clipOn;
+  if(!clipOn)return;
+  for(const h of clipHandles)h.scale.setScalar(clipHandleR(h.position));
+}
 function clipSyncSliders(){
   document.querySelectorAll('#clipRows input[type=range]').forEach(inp=>{
     const ax=inp.dataset.ax,end=inp.dataset.end,lo=clipFull.min[ax],hi=clipFull.max[ax],rng=(hi-lo)||1;
@@ -3446,6 +3459,7 @@ function clipEndDrag(){clipDragging=false;clipDragFace=null;document.getElementB
   },{passive:false});
   vc.addEventListener('touchend',()=>{if(clipDragging)clipEndDrag();},{passive:true});
 })();
+
 
 
 
