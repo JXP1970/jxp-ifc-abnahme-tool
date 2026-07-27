@@ -196,6 +196,11 @@ th.num{text-align:right}
 /* SETTINGS PANEL */
 .settings-panel{display:none;position:absolute;background:var(--glass);border:1px solid var(--accent);border-radius:9px;padding:13px;width:230px;z-index:10;backdrop-filter:blur(10px);font-size:16.5px}
 select.sb-inp{appearance:none}
+/* Box-Schnitt-Regler */
+.clip-row{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.clip-row .ax{width:16px;font-size:13.5px;font-weight:700;color:var(--accent);flex-shrink:0}
+.clip-row input[type=range]{flex:1;height:22px;accent-color:var(--accent);cursor:pointer}
+.clip-row .rr{flex:1}
 /* PRUEFPUNKTE */
 .pp-item{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--line);touch-action:manipulation;transition:background .1s}
 .pp-item:hover{background:var(--hover)}.pp-item.active{background:var(--sel)}
@@ -301,6 +306,7 @@ select.sb-inp{appearance:none}
         <button class="hb" id="hbGhost" title="Halbtransparent" style="opacity:.4">👻</button>
         <button class="hb" id="hbBox" title="Rechteck-Selektion" style="opacity:.4">⬚</button>
         <button class="hb" id="hbMeasure" title="Messen" style="opacity:.4">📏</button>
+        <button class="hb" id="hbClip" title="Box-Schnitt" style="opacity:.4">✂</button>
         <button class="hb" id="hbMeasureClear" title="Maße löschen" style="display:none;background:var(--glass);border:1px solid #ffee00!important;color:#ffee00!important">✕📏</button>
         <button class="hb" id="hbClear" title="Markierungen löschen" style="display:none;background:var(--glass);border:1px solid #ff4400!important;color:#ff4400!important">✕</button>
       </div>
@@ -356,6 +362,20 @@ select.sb-inp{appearance:none}
         <div style="margin-top:8px;display:flex;gap:5px">
           <button class="btn btn-s" id="mpAll" style="flex:1;font-size:15px">Alle</button>
           <button class="btn btn-s" id="mpNone" style="flex:1;font-size:15px">Keine</button>
+        </div>
+      </div>
+      <!-- Box-Schnitt -->
+      <div class="settings-panel" id="clipPanel" style="top:10px;left:10px;width:250px">
+        <div id="clipHdr" style="display:flex;align-items:center;gap:5px;justify-content:space-between;margin-bottom:9px">
+          <span style="color:var(--muted);font-size:21px;line-height:1;flex-shrink:0">⠿</span>
+          <span style="color:var(--text-strong);font-weight:700;font-size:16.5px;flex:1">✂ Box-Schnitt</span>
+          <button class="btn btn-s" id="clipClose" style="padding:1px 6px">✕</button>
+        </div>
+        <div style="font-size:13.5px;color:var(--muted);margin-bottom:8px">Regler ziehen, um das Modell aufzuschneiden. Auf Auswahl setzen begrenzt die Box auf die markierten Stäbe.</div>
+        <div id="clipRows"></div>
+        <div style="display:flex;gap:5px;margin-top:9px">
+          <button class="btn btn-s" id="clipToSel" style="flex:1;font-size:14px">🎯 Auf Auswahl</button>
+          <button class="btn btn-s" id="clipReset" style="flex:1;font-size:14px">↺ Voll</button>
         </div>
       </div>
       <!-- Stats bar -->
@@ -947,6 +967,7 @@ function initThree(){
   const canvas=document.getElementById('vc');
   renderer=new THREE.WebGLRenderer({canvas,antialias:true});
   renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  renderer.localClippingEnabled=true;   // für den Box-Schnitt
   renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
   scene=new THREE.Scene();scene.background=new THREE.Color(cssVar('--scene'));
   camera=new THREE.PerspectiveCamera(45,1,.0001,10000);camera.position.set(5,4,8);
@@ -973,6 +994,7 @@ function initThree(){
 
 function build3D(objs){
   initThree();
+  if(typeof clipDisable==='function')clipDisable();   // Box-Schnitt bei neuem Modell zurücksetzen
   for(const m of meshes)scene.remove(m);meshes=[];posG={};
   barSnapCache.clear();clearMeasures();
   for(const bar of objs){
@@ -3242,6 +3264,93 @@ makeResizable(document.getElementById('mp'),            190,150);
 makeResizable(document.getElementById('vInfoSettings'), 200,150);
 makeResizable(document.getElementById('mpSettings'),    200,150);
 
+// ── Box-Schnitt (3D-Clipping) ───────────────────────────────────────────────
+// Sechs achsparallele Schnittebenen bilden eine Box; nur ihr Inneres bleibt
+// sichtbar. So lässt sich in dichte Bewehrung hineinschauen. Der Schnitt gilt
+// auch im aufgenommenen Prüfpunkt-Bild.
+let clipOn=false;
+const clipPlanes=[
+  new THREE.Plane(new THREE.Vector3( 1,0,0),0), new THREE.Plane(new THREE.Vector3(-1,0,0),0),
+  new THREE.Plane(new THREE.Vector3(0, 1,0),0), new THREE.Plane(new THREE.Vector3(0,-1,0),0),
+  new THREE.Plane(new THREE.Vector3(0,0, 1),0), new THREE.Plane(new THREE.Vector3(0,0,-1),0)
+];
+const clipFull={min:new THREE.Vector3(),max:new THREE.Vector3()};   // Modellgrenzen
+const clipVal={xmin:0,xmax:0,ymin:0,ymax:0,zmin:0,zmax:0};          // aktuelle Box
+function clipModelBox(){const b=new THREE.Box3();meshes.forEach(m=>b.expandByObject(m));return b;}
+function clipUpdatePlanes(){
+  clipPlanes[0].constant=-clipVal.xmin; clipPlanes[1].constant=clipVal.xmax;
+  clipPlanes[2].constant=-clipVal.ymin; clipPlanes[3].constant=clipVal.ymax;
+  clipPlanes[4].constant=-clipVal.zmin; clipPlanes[5].constant=clipVal.zmax;
+}
+function clipApply(){
+  const planes=clipOn?clipPlanes:[];
+  meshes.forEach(m=>{m.material.clippingPlanes=planes;m.material.clipShadows=false;});
+}
+function clipSetBox(min,max){
+  clipVal.xmin=min.x;clipVal.xmax=max.x;clipVal.ymin=min.y;clipVal.ymax=max.y;clipVal.zmin=min.z;clipVal.zmax=max.z;
+  clipUpdatePlanes();clipBuildUI();
+}
+function clipBuildUI(){
+  const c=document.getElementById('clipRows');if(!c)return;
+  const axes=[['x','X'],['y','Y'],['z','Z']];
+  c.innerHTML='';
+  for(const [a,lbl] of axes){
+    const lo=clipFull.min[a],hi=clipFull.max[a],rng=(hi-lo)||1;
+    const fmin=Math.round((clipVal[a+'min']-lo)/rng*1000);
+    const fmax=Math.round((clipVal[a+'max']-lo)/rng*1000);
+    const row=document.createElement('div');row.className='clip-row';
+    row.innerHTML='<span class="ax">'+lbl+'</span>'
+      +'<input type="range" class="rr" min="0" max="1000" value="'+fmin+'" data-ax="'+a+'" data-end="min">'
+      +'<input type="range" class="rr" min="0" max="1000" value="'+fmax+'" data-ax="'+a+'" data-end="max">';
+    row.querySelectorAll('input').forEach(inp=>{
+      inp.addEventListener('input',()=>{
+        const ax=inp.dataset.ax,end=inp.dataset.end;
+        const lo2=clipFull.min[ax],hi2=clipFull.max[ax],rng2=(hi2-lo2)||1;
+        let v=lo2+(+inp.value)/1000*rng2;
+        // min darf max nicht überholen (kleine Mindestdicke lassen)
+        const gap=rng2*0.01;
+        if(end==='min'){if(v>clipVal[ax+'max']-gap)v=clipVal[ax+'max']-gap;clipVal[ax+'min']=v;}
+        else{if(v<clipVal[ax+'min']+gap)v=clipVal[ax+'min']+gap;clipVal[ax+'max']=v;}
+        clipUpdatePlanes();
+      });
+    });
+    c.appendChild(row);
+  }
+}
+function clipToggle(on){
+  if(!meshes.length){toast('Kein Modell geladen','warn');return;}
+  clipOn=on!==undefined?on:!clipOn;
+  const btn=document.getElementById('hbClip');
+  btn.classList.toggle('ghost-on',clipOn);btn.style.opacity=clipOn?'1':'.4';
+  document.getElementById('clipPanel').style.display=clipOn?'block':'none';
+  if(clipOn){
+    const b=clipModelBox();
+    if(!b.isEmpty()){clipFull.min.copy(b.min);clipFull.max.copy(b.max);clipSetBox(b.min,b.max);}
+  }
+  clipApply();
+}
+function clipDisable(){   // bei neuem Modell: Schnitt aus
+  clipOn=false;
+  const btn=document.getElementById('hbClip');if(btn){btn.classList.remove('ghost-on');btn.style.opacity='.4';}
+  const p=document.getElementById('clipPanel');if(p)p.style.display='none';
+}
+document.getElementById('hbClip').addEventListener('click',()=>clipToggle());
+document.getElementById('hbClip').addEventListener('touchend',e=>{e.preventDefault();clipToggle();},{passive:false});
+document.getElementById('clipClose').addEventListener('click',()=>clipToggle(false));
+document.getElementById('clipReset').addEventListener('click',()=>{clipSetBox(clipFull.min,clipFull.max);});
+document.getElementById('clipToSel').addEventListener('click',()=>{
+  if(!marked.size){toast('Nichts markiert','warn');return;}
+  const b=new THREE.Box3();meshes.filter(m=>marked.has(m.userData.id)).forEach(m=>b.expandByObject(m));
+  if(b.isEmpty())return;
+  // etwas Luft lassen, damit die Randstäbe ganz sichtbar bleiben
+  const s=b.getSize(new THREE.Vector3()).multiplyScalar(0.05);
+  b.min.sub(s);b.max.add(s);
+  clipSetBox(b.min,b.max);
+});
+['clipClose','clipReset','clipToSel'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
+makeDraggable(document.getElementById('clipPanel'),document.getElementById('clipHdr'));
+
+
 
 
 
@@ -3258,8 +3367,12 @@ makeResizable(document.getElementById('mpSettings'),    200,150);
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.3';
+const APP_VERSION='3.4';
 const APP_CHANGELOG=[
+  {v:'3.4', date:'2026-07-27', notes:[
+    'Viewer: Box-Schnitt (✂) – sechs Regler (X/Y/Z je min/max) schneiden das Modell auf, sodass man in dichte Bewehrung hineinschauen kann; „Auf Auswahl" begrenzt die Box auf die markierten Stäbe',
+    'Der Schnitt erscheint auch im aufgenommenen Prüfpunkt-Bild',
+  ]},
   {v:'3.3', date:'2026-07-24', notes:[
     'Abnahme sichern und laden: alle Prüfpunkte (mit Modellbildern, Fotos, Kriterien und Protokollkopf) lassen sich als Datei speichern und später – auch auf einem anderen Gerät – wieder einlesen',
     'Das gesicherte Protokoll lässt sich auf dem anderen Gerät auch ohne die IFC-Datei als PDF/PNG ausgeben; für „↗ Ansicht" und neue Aufnahmen muss dieselbe IFC geladen sein',
