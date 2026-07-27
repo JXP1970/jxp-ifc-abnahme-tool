@@ -1,3 +1,6 @@
 ﻿.claude/
 *.tmp
 Thumbs.db
+
+# Interne Analyse – nicht ins oeffentliche Repo
+ANALYSE.md
