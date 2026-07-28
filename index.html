@@ -1721,6 +1721,13 @@ function ppCapture(pp){
   }
   for(const p of measurePts)if(p.sphere&&p.sphere.visible){p.sphere.visible=false;measHid.push(p.sphere);}
   if(measureLiveLine&&measureLiveLine.visible){measureLiveLine.visible=false;measHid.push(measureLiveLine);}
+  // Gültige Aufnahmegröße erzwingen: im Abnahme-Tab ist der Viewer verborgen,
+  // dann ist die Canvas-Breite 0 und die Renderschleife hat den Backbuffer auf
+  // 0×0 gesetzt – ppCapture würde sonst ein leeres Bild liefern.
+  const _prevAspect=camera.aspect;let _sizeForced=false;
+  if(renderer.domElement.width<10||renderer.domElement.height<10){
+    renderer.setSize(1600,1000,false);camera.aspect=1.6;camera.updateProjectionMatrix();_sizeForced=true;
+  }
   renderer.render(scene,camera);
   const src=renderer.domElement;
   const c=document.createElement('canvas');
@@ -1736,6 +1743,7 @@ function ppCapture(pp){
   if(gizVis)clipGizmo.visible=true;
   scene.background=prevBg;buildGrid();
   if(ringVis)snapIndicatorRing.visible=true;
+  if(_sizeForced){camera.aspect=_prevAspect;camera.updateProjectionMatrix();}   // Kamera für den Viewer zurücksetzen (rz passt die Größe an)
   pp.bildW=c.width;pp.bildH=c.height;
   return c.toDataURL('image/png');
 }
@@ -3585,6 +3593,7 @@ ppLiveLabel();
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
@@ -3593,6 +3602,7 @@ const APP_VERSION='3.7';
 const APP_CHANGELOG=[
   {v:'3.7', date:'2026-07-28', notes:[
     '„📷 Als Bild übernehmen" in der Live-Ansicht: die aktuell eingestellte Drehung/Zoom wird als Modellbild des Prüfpunkts übernommen und erscheint so in Protokoll, PDF, PNG und Dalux-Paket',
+    'Behoben: im Abnahme-Tab lieferte die Aufnahme ein leeres Bild (verborgener Viewer, Canvas-Breite 0); jetzt wird eine feste Aufnahmegröße erzwungen',
   ]},
   {v:'3.6', date:'2026-07-28', notes:[
     'Abnahme: unter dem Standbild jetzt zusätzlich eine interaktive Live-3D-Ansicht des Modells – drehen und zoomen direkt beim Prüfpunkt, ohne den Tab zu wechseln; startet in der gespeicherten Ansicht des Prüfpunkts',
