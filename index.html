@@ -453,6 +453,7 @@ select.sb-inp{appearance:none}
           </div>
           <div id="ppLiveWrap" style="display:none;margin-top:6px;position:relative">
             <canvas id="ppLiveCanvas" style="width:100%;height:300px;display:block;border-radius:5px;border:1px solid var(--border);background:var(--scene);touch-action:none;outline:none"></canvas>
+            <button class="btn btn-p" id="ppLiveGrab" title="Diese Live-Ansicht als Modellbild für Protokoll, PDF und Dalux-Paket übernehmen" style="position:absolute;left:8px;bottom:8px;font-size:13.5px;padding:3px 8px">📷 Als Bild übernehmen</button>
             <button class="btn btn-s" id="ppLiveFit" title="Auf den Prüfpunkt einpassen" style="position:absolute;right:8px;bottom:8px;font-size:13.5px;padding:3px 8px">⤢ Einpassen</button>
           </div>
         </div>
@@ -3561,16 +3562,38 @@ document.getElementById('ppLiveToggle').addEventListener('click',()=>{
   ppLiveShow(ppCur);
 });
 document.getElementById('ppLiveFit').addEventListener('click',ppLiveFit);
-['ppLiveToggle','ppLiveFit'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
+// Live-Ansicht als Modellbild übernehmen: der aktuelle Live-Kamerazustand wird
+// zur Ansicht des Prüfpunkts, dann wird das Bild in dieser Ansicht neu gerendert.
+// Damit landet die eingestellte Live-Ansicht in Protokoll, PDF, PNG und ZIP.
+function ppLiveCapture(){
+  if(!ppCur){toast('Kein Prüfpunkt gewählt','warn');return;}
+  if(!ppLiveActive||!ppLiveOrbit){toast('Live-Ansicht ist aus','warn');return;}
+  if(!meshes.length){toast('Kein Modell geladen','warn');return;}
+  const o=ppLiveOrbit;
+  ppCur.view={x:o.target.x,y:o.target.y,z:o.target.z,r:o.sph.radius,th:o.sph.theta,ph:o.sph.phi};
+  ppSetView(ppCur.view);           // Haupt-Kamera auf die Live-Ansicht setzen
+  const b=ppCapture(ppCur);        // Modellbild in dieser Ansicht (hell/dunkel, isoliert, mit Maßen)
+  if(!b){toast('Aufnahme fehlgeschlagen','err');return;}
+  ppCur.bildRaw=b;
+  const img=document.getElementById('ppBild');img.src=b;img.style.display='block';
+  ppRenderList();
+  toast('Live-Ansicht als Modellbild übernommen');
+}
+document.getElementById('ppLiveGrab').addEventListener('click',ppLiveCapture);
+['ppLiveToggle','ppLiveFit','ppLiveGrab'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
 ppLiveLabel();
+
 
 
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.6';
+const APP_VERSION='3.7';
 const APP_CHANGELOG=[
+  {v:'3.7', date:'2026-07-28', notes:[
+    '„📷 Als Bild übernehmen" in der Live-Ansicht: die aktuell eingestellte Drehung/Zoom wird als Modellbild des Prüfpunkts übernommen und erscheint so in Protokoll, PDF, PNG und Dalux-Paket',
+  ]},
   {v:'3.6', date:'2026-07-28', notes:[
     'Abnahme: unter dem Standbild jetzt zusätzlich eine interaktive Live-3D-Ansicht des Modells – drehen und zoomen direkt beim Prüfpunkt, ohne den Tab zu wechseln; startet in der gespeicherten Ansicht des Prüfpunkts',
     '„⤢ Einpassen" rückt die Live-Ansicht auf die Stäbe des Prüfpunkts; „3D aus/ein" schaltet sie ab (im Browser gemerkt)',
