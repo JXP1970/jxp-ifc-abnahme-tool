@@ -447,6 +447,14 @@ select.sb-inp{appearance:none}
             </span>
           </h3>
           <img id="ppBild" style="width:100%;border-radius:5px;border:1px solid var(--border);display:block">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:9px">
+            <span class="hd-lbl" style="margin:0">Live-Ansicht · drehen &amp; zoomen</span>
+            <button class="btn btn-s" id="ppLiveToggle" style="font-size:13.5px;padding:3px 8px" title="Interaktive 3D-Ansicht ein-/ausschalten">3D ein</button>
+          </div>
+          <div id="ppLiveWrap" style="display:none;margin-top:6px;position:relative">
+            <canvas id="ppLiveCanvas" style="width:100%;height:300px;display:block;border-radius:5px;border:1px solid var(--border);background:var(--scene);touch-action:none;outline:none"></canvas>
+            <button class="btn btn-s" id="ppLiveFit" title="Auf den Prüfpunkt einpassen" style="position:absolute;right:8px;bottom:8px;font-size:13.5px;padding:3px 8px">⤢ Einpassen</button>
+          </div>
         </div>
 
         <!-- Soll / Ist -->
@@ -826,6 +834,37 @@ class OC{
   fitTo(box){const c=box.getCenter(new THREE.Vector3()),s=box.getSize(new THREE.Vector3()),d=Math.max(s.x,s.y,s.z);this.target.copy(c);this.sph.radius=d*1.8;this.sph.phi=Math.PI/3;this.sph.theta=Math.PI/6;this.sync();}
 }
 
+// Schlanker Orbit-Controller für die eingebettete Live-Ansicht im Abnahme-Tab
+// (drehen/zoomen/pan, ohne Markieren) – setzt die Kamera direkt.
+class MiniOrbit{
+  constructor(cam,el){
+    this.cam=cam;this.target=new THREE.Vector3();
+    this.sph=new THREE.Spherical();this.sph.setFromVector3(new THREE.Vector3().subVectors(cam.position,this.target));
+    let mb=-1,ms={x:0,y:0},t1=null,pd=0;
+    const rot=(dx,dy)=>{this.sph.theta-=dx*0.005;this.sph.phi=Math.max(.05,Math.min(Math.PI-.05,this.sph.phi-dy*0.005));this.sync();};
+    const pan=(dx,dy)=>{this.target.add(new THREE.Vector3(-dx,dy,0).multiplyScalar(this.sph.radius*0.0012).applyQuaternion(cam.quaternion));this.sync();};
+    const zoom=f=>{this.sph.radius=Math.max(1e-4,Math.min(5000,this.sph.radius*f));this.sync();};
+    el.addEventListener('mousedown',e=>{mb=e.button;ms={x:e.clientX,y:e.clientY};});
+    window.addEventListener('mousemove',e=>{if(mb<0)return;const dx=e.clientX-ms.x,dy=e.clientY-ms.y;ms={x:e.clientX,y:e.clientY};if(mb===0)rot(dx,dy);else pan(dx,dy);});
+    window.addEventListener('mouseup',()=>{mb=-1;});
+    el.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.08:0.92);},{passive:false});
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+    el.addEventListener('touchstart',e=>{
+      if(e.touches.length===1){t1={x:e.touches[0].clientX,y:e.touches[0].clientY};pd=0;}
+      else if(e.touches.length===2){const a=e.touches[0],b=e.touches[1];pd=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);t1={x:(a.clientX+b.clientX)/2,y:(a.clientY+b.clientY)/2};}
+    },{passive:true});
+    el.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      if(e.touches.length===1&&pd===0){const t=e.touches[0];if(t1)rot((t.clientX-t1.x),(t.clientY-t1.y));t1={x:t.clientX,y:t.clientY};}
+      else if(e.touches.length===2){const a=e.touches[0],b=e.touches[1];const nd=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);const mx=(a.clientX+b.clientX)/2,my=(a.clientY+b.clientY)/2;if(pd>1&&nd>1)zoom(Math.pow(0.975,nd-pd));pd=nd;if(t1)pan(mx-t1.x,my-t1.y);t1={x:mx,y:my};}
+    },{passive:false});
+    el.addEventListener('touchend',e=>{if(e.touches.length===0){t1=null;pd=0;}else if(e.touches.length===1){t1={x:e.touches[0].clientX,y:e.touches[0].clientY};pd=0;}},{passive:true});
+  }
+  sync(){const o=new THREE.Vector3();o.setFromSpherical(this.sph);this.cam.position.copy(this.target).add(o);this.cam.lookAt(this.target);}
+  setFromView(v){if(!v)return;this.target.set(v.x,v.y,v.z);this.sph.radius=v.r;this.sph.theta=v.th;this.sph.phi=v.ph;this.sync();}
+  fitTo(box){const c=box.getCenter(new THREE.Vector3()),s=box.getSize(new THREE.Vector3()),d=Math.max(s.x,s.y,s.z)||1;this.target.copy(c);this.sph.radius=d*1.8;this.sync();}
+}
+
 let BARS=[],editMap={},selId=null,fltGrp=null,srch='',fldFlt='',valFlt='',sortF='grp',sortA=true,fname='',COLS=[],rawIFC='';
 let boxMode=false,isolateMode=false,measureMode=false;
 let clipDragging=false,clipSuppressClick=false;   // Ziehen eines Schnittbox-Griffs
@@ -920,7 +959,8 @@ function switchTab(t){
     document.getElementById('panel'+id).classList.toggle('active',t===id.toLowerCase());
     document.getElementById('tab'+id).classList.toggle('active',t===id.toLowerCase());
   });
-  if(t==='abnahme')ppRenderList();
+  if(t==='abnahme'){ppRenderList();if(ppCur)ppLiveShow(ppCur);}
+  else ppLiveActive=false;   // Live-Ansicht nur im Abnahme-Tab rendern
 }
 document.getElementById('tabEditor').addEventListener('click',()=>switchTab('editor'));
 document.getElementById('tabViewer').addEventListener('click',()=>switchTab('viewer'));
@@ -977,7 +1017,7 @@ function initThree(){
   const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(5,10,7);scene.add(dl);
   buildGrid();
   function rz(){const w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}}
-  function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();clipTick();}
+  function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();clipTick();ppLiveTick();}
   loop();
   canvas.addEventListener('touchend',()=>{lastTouchEnd=Date.now();},{passive:true});
   // Markieren nur bei einem echten Klick, nicht am Ende eines Dreh-Zugs.
@@ -1877,6 +1917,7 @@ function ppOpen(pp){
   else{fi.style.display='none';document.getElementById('ppFotoName').textContent='';}
   document.getElementById('ppAttrScope').textContent=pp.attrKeys?'eigene Auswahl':'Vorgabe';
   ppRenderAttrs();ppRenderKrit();ppDelta();ppRenderList();
+  ppLiveShow(pp);
 }
 
 function ppRenderAttrs(){
@@ -3475,12 +3516,65 @@ function clipEndDrag(){clipDragging=false;clipDragFace=null;document.getElementB
 
 
 
+// ── Live-3D-Ansicht im Abnahme-Tab ──────────────────────────────────────────
+// Zweiter Renderer, der DIESELBE Szene mit eigener Kamera zeigt – so lässt sich
+// das Modell direkt beim Prüfpunkt drehen/zoomen, ohne den Tab zu wechseln.
+// Initialansicht = gespeicherte Kamera des Prüfpunkts (wie im Viewer beim Anlegen).
+let ppLiveOn=true,ppLiveActive=false,ppLiveRenderer=null,ppLiveCam=null,ppLiveOrbit=null;
+try{if(localStorage.getItem('jxp_pplive')==='0')ppLiveOn=false;}catch(e){}
+function ppLiveLabel(){const b=document.getElementById('ppLiveToggle');if(b)b.textContent=ppLiveOn?'3D aus':'3D ein';}
+function ppLiveInit(){
+  if(ppLiveRenderer)return;
+  const cv=document.getElementById('ppLiveCanvas');
+  ppLiveRenderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  ppLiveRenderer.setPixelRatio(Math.min(devicePixelRatio,2));
+  ppLiveRenderer.localClippingEnabled=true;
+  ppLiveRenderer.toneMapping=THREE.ACESFilmicToneMapping;ppLiveRenderer.toneMappingExposure=1.1;
+  ppLiveCam=new THREE.PerspectiveCamera(45,1,.0001,10000);ppLiveCam.position.set(5,4,8);
+  ppLiveOrbit=new MiniOrbit(ppLiveCam,cv);
+}
+function ppLiveTick(){   // aus der Renderschleife: Live-Ansicht zeichnen, wenn aktiv
+  if(!ppLiveActive||!ppLiveRenderer||!scene)return;
+  const cv=ppLiveRenderer.domElement,w=cv.clientWidth,h=cv.clientHeight;
+  if(!w||!h)return;
+  if(cv.width!==w||cv.height!==h){ppLiveRenderer.setSize(w,h,false);ppLiveCam.aspect=w/h;ppLiveCam.updateProjectionMatrix();}
+  ppLiveRenderer.render(scene,ppLiveCam);
+}
+function ppLiveShow(pp){   // beim Öffnen eines Prüfpunkts / Tab-Wechsel
+  const wrap=document.getElementById('ppLiveWrap');if(!wrap)return;
+  if(!ppLiveOn||!meshes.length){wrap.style.display='none';ppLiveActive=false;return;}
+  wrap.style.display='block';
+  ppLiveInit();
+  ppLiveActive=true;
+  if(pp&&pp.view)ppLiveOrbit.setFromView(pp.view);
+}
+function ppLiveFit(){
+  if(!ppLiveActive||!ppCur)return;
+  const set=new Set(ppCur.ids),box=new THREE.Box3();
+  meshes.filter(m=>set.has(m.userData.id)).forEach(m=>box.expandByObject(m));
+  if(box.isEmpty())meshes.forEach(m=>box.expandByObject(m));
+  if(!box.isEmpty())ppLiveOrbit.fitTo(box);
+}
+document.getElementById('ppLiveToggle').addEventListener('click',()=>{
+  ppLiveOn=!ppLiveOn;ppLiveLabel();
+  try{localStorage.setItem('jxp_pplive',ppLiveOn?'1':'0');}catch(e){}
+  ppLiveShow(ppCur);
+});
+document.getElementById('ppLiveFit').addEventListener('click',ppLiveFit);
+['ppLiveToggle','ppLiveFit'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
+ppLiveLabel();
+
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.5';
+const APP_VERSION='3.6';
 const APP_CHANGELOG=[
+  {v:'3.6', date:'2026-07-28', notes:[
+    'Abnahme: unter dem Standbild jetzt zusätzlich eine interaktive Live-3D-Ansicht des Modells – drehen und zoomen direkt beim Prüfpunkt, ohne den Tab zu wechseln; startet in der gespeicherten Ansicht des Prüfpunkts',
+    '„⤢ Einpassen" rückt die Live-Ansicht auf die Stäbe des Prüfpunkts; „3D aus/ein" schaltet sie ab (im Browser gemerkt)',
+  ]},
   {v:'3.5', date:'2026-07-27', notes:[
     'Box-Schnitt jetzt auch mit Ziehgriffen direkt im 3D: Rahmen um das Modell mit sechs orangen Griffen an den Flächen – anfassen und ziehen, um die Schnittbox aufzuziehen (zusätzlich zu den Reglern)',
   ]},
