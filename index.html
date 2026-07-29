@@ -295,8 +295,18 @@ select.sb-inp{appearance:none}
     </div>
     <div class="v-ca">
       <canvas id="vc"></canvas>
+      <canvas id="annCanvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;touch-action:none"></canvas>
       <div id="vEmpty" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--muted);gap:8px;font-size:18px">
         <span style="font-size:48px;opacity:.2">🧊</span><span>IFC laden</span>
+      </div>
+      <!-- Zeichen-/Notiz-Werkzeugleiste -->
+      <div id="annBar" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:4;background:var(--glass);border:1px solid var(--border);border-radius:10px;padding:6px 8px;backdrop-filter:blur(8px);align-items:center;gap:6px;flex-wrap:wrap;max-width:calc(100% - 20px)">
+        <button class="btn btn-s" id="annPen"  title="Freihand zeichnen" style="font-size:16px;padding:4px 9px">✏️</button>
+        <button class="btn btn-s" id="annText" title="Text/Notiz setzen" style="font-size:16px;padding:4px 9px">T</button>
+        <span id="annColors" style="display:inline-flex;gap:4px;align-items:center;margin:0 2px"></span>
+        <button class="btn btn-s" id="annUndo" title="Letztes rückgängig" style="font-size:15px;padding:4px 9px">↶</button>
+        <button class="btn btn-d" id="annClear" title="Alle Markierungen löschen" style="font-size:15px;padding:4px 9px">🗑</button>
+        <span style="font-size:13.5px;color:var(--muted)">→ Prüfpunkt übernimmt sie</span>
       </div>
       <!-- HUD -->
       <div class="v-hud" id="vHud" style="display:none">
@@ -307,6 +317,7 @@ select.sb-inp{appearance:none}
         <button class="hb" id="hbBox" title="Rechteck-Selektion" style="opacity:.4">⬚</button>
         <button class="hb" id="hbMeasure" title="Messen" style="opacity:.4">📏</button>
         <button class="hb" id="hbClip" title="Box-Schnitt" style="opacity:.4">✂</button>
+        <button class="hb" id="hbDraw" title="Zeichnen / Notiz" style="opacity:.4">✎</button>
         <button class="hb" id="hbMeasureClear" title="Maße löschen" style="display:none;background:var(--glass);border:1px solid #ffee00!important;color:#ffee00!important">✕📏</button>
         <button class="hb" id="hbClear" title="Markierungen löschen" style="display:none;background:var(--glass);border:1px solid #ff4400!important;color:#ff4400!important">✕</button>
       </div>
@@ -784,23 +795,23 @@ class OC{
     this._dt=0;this._dp=0;this._pan=new THREE.Vector3();
     this._t1=null;this._pd=0;
     let mb=-1,ms={x:0,y:0};
-    el.addEventListener('mousedown',e=>{if(boxMode||measureMode||clipDragging)return;mb=e.button;ms={x:e.clientX,y:e.clientY};});
+    el.addEventListener('mousedown',e=>{if(boxMode||measureMode||clipDragging||drawMode)return;mb=e.button;ms={x:e.clientX,y:e.clientY};});
     el.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.08:0.92;this.sph.radius=Math.max(0.00001,Math.min(5000,this.sph.radius*f));this.sync();},{passive:false});
     el.addEventListener('contextmenu',e=>e.preventDefault());
     window.addEventListener('mousemove',e=>{
-      if(boxMode||measureMode||clipDragging)return;
+      if(boxMode||measureMode||clipDragging||drawMode)return;
       if(mb===0){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._dt-=dx*0.005;this._dp-=dy*0.005;ms={x:e.clientX,y:e.clientY};}
       if(mb===2||mb===1){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._pan.add(new THREE.Vector3(-dx,dy,0).multiplyScalar(this.sph.radius*0.001).applyQuaternion(cam.quaternion));ms={x:e.clientX,y:e.clientY};}
     });
     window.addEventListener('mouseup',()=>{mb=-1;});
     let tapStart=null,tapMoved=false;
     el.addEventListener('touchstart',e=>{
-      if(boxMode||measureMode||clipDragging)return;
+      if(boxMode||measureMode||clipDragging||drawMode)return;
       if(e.touches.length===1){this._t1={x:e.touches[0].clientX,y:e.touches[0].clientY};this._pd=0;tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};tapMoved=false;}
       else if(e.touches.length===2){const t0=e.touches[0],t1=e.touches[1];this._pd=Math.hypot(t1.clientX-t0.clientX,t1.clientY-t0.clientY);this._t1={x:(t0.clientX+t1.clientX)/2,y:(t0.clientY+t1.clientY)/2};tapStart=null;}
     },{passive:true});
     el.addEventListener('touchmove',e=>{
-      if(boxMode||measureMode||clipDragging)return;
+      if(boxMode||measureMode||clipDragging||drawMode)return;
       e.preventDefault();
       if(e.touches.length===1&&this._pd===0){
         const t=e.touches[0];
@@ -818,7 +829,7 @@ class OC{
       }
     },{passive:false});
     el.addEventListener('touchend',e=>{
-      if(boxMode||measureMode||clipDragging)return;
+      if(boxMode||measureMode||clipDragging||drawMode)return;
       if(e.touches.length===0){
         if(!tapMoved&&tapStart&&Date.now()-tapStart.t<300){doRaycast(tapStart.x,tapStart.y);}
         this._t1=null;this._pd=0;tapStart=null;
@@ -869,6 +880,7 @@ class MiniOrbit{
 let BARS=[],editMap={},selId=null,fltGrp=null,srch='',fldFlt='',valFlt='',sortF='grp',sortA=true,fname='',COLS=[],rawIFC='';
 let boxMode=false,isolateMode=false,measureMode=false;
 let clipDragging=false,clipSuppressClick=false;   // Ziehen eines Schnittbox-Griffs
+let drawMode=false;                               // Zeichen-/Notiz-Modus
 let grpField='Pos_Nr.';
 function grp(b){
   if(grpField==='__type__')return b.name||'?';
@@ -1018,7 +1030,7 @@ function initThree(){
   const dl=new THREE.DirectionalLight(0xffffff,1.1);dl.position.set(5,10,7);scene.add(dl);
   buildGrid();
   function rz(){const w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==w||canvas.height!==h){renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}}
-  function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();clipTick();ppLiveTick();}
+  function loop(){requestAnimationFrame(loop);rz();oc.update();renderer.render(scene,camera);updateMeasureLabels();clipTick();ppLiveTick();annRedraw();}
   loop();
   canvas.addEventListener('touchend',()=>{lastTouchEnd=Date.now();},{passive:true});
   // Markieren nur bei einem echten Klick, nicht am Ende eines Dreh-Zugs.
@@ -1737,6 +1749,7 @@ function ppCapture(pp){
   const ctx=c.getContext('2d');
   ctx.drawImage(src,0,0);
   ppDrawMeasures(ctx,c,hell);
+  if(!ppAnnSuppress)annDrawTo(ctx,c.width,c.height);   // Markierungen/Notizen ins Bild brennen
   prev.forEach(p=>{
     p.m.visible=p.v;p.m.material.opacity=p.o;p.m.material.transparent=p.t;
     p.m.material.color.setHex(p.c);p.m.material.emissive.setHex(p.e);p.m.material.emissiveIntensity=p.i;
@@ -1834,8 +1847,10 @@ function ppNew(){
   // zeigt. „⟳ Neu aufnehmen“ übernimmt dagegen die aktuelle Ansicht unverändert.
   ppFrame(ids);
   pp.view=ppView();
-  pp.bildRaw=ppCapture(pp);
+  pp.ann=annSnapshot();            // Markierungen/Notizen zum Prüfpunkt sichern
+  pp.bildRaw=ppCapture(pp);        // sie sind bereits im Bild enthalten
   PP.push(pp);
+  annClearAll();                   // Zeichenebene für den nächsten Prüfpunkt leeren
   ppClearMarks();
   ppOpen(pp);
   toast('Prüfpunkt '+ppLabel(pp)+' angelegt · Tab „Abnahme"');
@@ -3584,7 +3599,9 @@ function ppLiveCapture(){
   const o=ppLiveOrbit;
   ppCur.view={x:o.target.x,y:o.target.y,z:o.target.z,r:o.sph.radius,th:o.sph.theta,ph:o.sph.phi};
   ppSetView(ppCur.view);           // Haupt-Kamera auf die Live-Ansicht setzen
+  ppAnnSuppress=true;              // Viewer-Notizen passen nicht zur Live-Ansicht
   const b=ppCapture(ppCur);        // Modellbild in dieser Ansicht (hell/dunkel, isoliert, mit Maßen)
+  ppAnnSuppress=false;
   if(!b){toast('Aufnahme fehlgeschlagen','err');return;}
   ppCur.bildRaw=b;
   const img=document.getElementById('ppBild');img.src=b;img.style.display='block';
@@ -3599,12 +3616,116 @@ ppLiveLabel();
 
 
 
+// ── Zeichnen & Notizen (2D-Overlay über dem Viewer) ─────────────────────────
+// Freihand-Markierungen und Textnotizen auf einer transparenten Ebene über dem
+// 3D-Bild. Beim Anlegen eines Prüfpunkts werden sie fest ins Modellbild
+// übernommen und erscheinen so im Protokoll (PDF, PNG, Dalux-Paket).
+// Koordinaten normalisiert [0..1] → unabhängig von Auflösung/Bildgröße.
+let annTool='pen',annColor='#ff2d2d',annStrokes=[],annTexts=[],annCur=null,ppAnnSuppress=false;
+const ANN_COLORS=['#ff2d2d','#ff8a00','#ffd400','#22c55e','#3b82f6','#ffffff','#111111'];
+const annCv=document.getElementById('annCanvas'),annCtx=annCv.getContext('2d');
+function annHasContent(){return annStrokes.length||annTexts.length;}
+function annSnapshot(){return {strokes:JSON.parse(JSON.stringify(annStrokes)),texts:JSON.parse(JSON.stringify(annTexts))};}
+function annClearAll(){annStrokes=[];annTexts=[];}
+function annRR(ctx,x,y,w,h,r){ctx.beginPath();if(ctx.roundRect)ctx.roundRect(x,y,w,h,r);else ctx.rect(x,y,w,h);}
+// Markierungen auf ein beliebiges Canvas zeichnen (Overlay und Aufnahme)
+function annDrawTo(ctx,W,H){
+  if(!W||!H)return;
+  for(const s of annStrokes){
+    if(!s.pts||s.pts.length<1)continue;
+    const lw=Math.max(1.5,s.w*H);
+    ctx.lineJoin='round';ctx.lineCap='round';
+    ctx.strokeStyle='rgba(0,0,0,.35)';ctx.lineWidth=lw+Math.max(2,lw*0.5);
+    ctx.beginPath();ctx.moveTo(s.pts[0].x*W,s.pts[0].y*H);for(let i=1;i<s.pts.length;i++)ctx.lineTo(s.pts[i].x*W,s.pts[i].y*H);
+    if(s.pts.length===1)ctx.lineTo(s.pts[0].x*W+0.1,s.pts[0].y*H);ctx.stroke();
+    ctx.strokeStyle=s.color;ctx.lineWidth=lw;
+    ctx.beginPath();ctx.moveTo(s.pts[0].x*W,s.pts[0].y*H);for(let i=1;i<s.pts.length;i++)ctx.lineTo(s.pts[i].x*W,s.pts[i].y*H);
+    if(s.pts.length===1)ctx.lineTo(s.pts[0].x*W+0.1,s.pts[0].y*H);ctx.stroke();
+  }
+  for(const t of annTexts){
+    const fs=Math.max(11,t.size*H);ctx.font='700 '+fs+'px Arial,sans-serif';ctx.textBaseline='top';
+    const tw=ctx.measureText(t.text).width,pad=fs*0.28,x=t.x*W,y=t.y*H;
+    ctx.fillStyle='rgba(255,255,255,.92)';annRR(ctx,x-pad,y-pad,tw+2*pad,fs+2*pad,fs*0.25);ctx.fill();
+    ctx.strokeStyle=t.color;ctx.lineWidth=Math.max(1,fs*0.07);annRR(ctx,x-pad,y-pad,tw+2*pad,fs+2*pad,fs*0.25);ctx.stroke();
+    ctx.fillStyle=t.color;ctx.fillText(t.text,x,y);
+  }
+}
+function annRedraw(){
+  const w=annCv.clientWidth,h=annCv.clientHeight;if(!w||!h)return;
+  if(annCv.width!==w||annCv.height!==h){annCv.width=w;annCv.height=h;}
+  annCtx.clearRect(0,0,annCv.width,annCv.height);
+  annDrawTo(annCtx,annCv.width,annCv.height);
+}
+function annNorm(e){const r=annCv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height,cx:e.clientX,cy:e.clientY};}
+annCv.addEventListener('pointerdown',e=>{
+  if(!drawMode)return;e.preventDefault();
+  const p=annNorm(e);
+  if(annTool==='text'){annPlaceText(p);return;}
+  annCur={color:annColor,w:0.006,pts:[{x:p.x,y:p.y}]};annStrokes.push(annCur);
+  try{annCv.setPointerCapture(e.pointerId);}catch(_){}
+});
+annCv.addEventListener('pointermove',e=>{if(!drawMode||annTool!=='pen'||!annCur)return;e.preventDefault();const p=annNorm(e);annCur.pts.push({x:p.x,y:p.y});annRedraw();});
+annCv.addEventListener('pointerup',()=>{annCur=null;});
+annCv.addEventListener('pointercancel',()=>{annCur=null;});
+function annPlaceText(p){
+  const vca=document.querySelector('.v-ca'),r=vca.getBoundingClientRect();
+  const inp=document.createElement('input');inp.type='text';inp.placeholder='Notiz…';
+  inp.style.cssText='position:absolute;z-index:6;font:700 16px Arial,sans-serif;color:'+annColor
+    +';background:rgba(255,255,255,.96);border:1px solid '+annColor+';border-radius:5px;padding:3px 7px;min-width:130px;max-width:60%';
+  inp.style.left=Math.min(p.cx-r.left,r.width-150)+'px';inp.style.top=(p.cy-r.top)+'px';
+  vca.appendChild(inp);setTimeout(()=>inp.focus(),0);
+  let done=false;
+  const commit=()=>{if(done)return;done=true;const v=inp.value.trim();if(v)annTexts.push({x:p.x,y:p.y,text:v,color:annColor,size:0.032});if(inp.parentElement)inp.parentElement.removeChild(inp);annRedraw();};
+  inp.addEventListener('keydown',ev=>{if(ev.key==='Enter'){ev.preventDefault();commit();}else if(ev.key==='Escape'){done=true;if(inp.parentElement)inp.parentElement.removeChild(inp);}});
+  inp.addEventListener('blur',commit);
+}
+function annSetMode(on){
+  drawMode=on!==undefined?on:!drawMode;
+  const btn=document.getElementById('hbDraw');btn.classList.toggle('ghost-on',drawMode);btn.style.opacity=drawMode?'1':'.4';
+  document.getElementById('annBar').style.display=drawMode?'flex':'none';
+  annCv.style.pointerEvents=drawMode?'auto':'none';
+  annCv.style.cursor=drawMode?'crosshair':'';
+  if(drawMode){   // andere Interaktionsmodi ausschalten
+    if(boxMode){boxMode=false;const hb=document.getElementById('hbBox');hb.style.opacity='.4';hb.classList.remove('ghost-on');document.getElementById('vc').style.cursor='';}
+    if(measureMode){measureMode=false;const hb=document.getElementById('hbMeasure');hb.style.opacity='.4';hb.classList.remove('ghost-on');if(typeof hideSnapIndicator==='function')hideSnapIndicator();}
+  }
+}
+function annSetTool(t){
+  annTool=t;
+  document.getElementById('annPen').classList.toggle('on-io',t==='pen');
+  document.getElementById('annText').classList.toggle('on-io',t==='text');
+}
+(function annColorSwatches(){
+  const wrap=document.getElementById('annColors');if(!wrap)return;
+  for(const col of ANN_COLORS){
+    const s=document.createElement('button');
+    s.title='Farbe';s.dataset.col=col;
+    s.style.cssText='width:22px;height:22px;border-radius:50%;border:2px solid var(--border);background:'+col+';cursor:pointer;padding:0;flex-shrink:0';
+    s.addEventListener('click',()=>{annColor=col;wrap.querySelectorAll('button').forEach(b=>b.style.borderColor='var(--border)');s.style.borderColor='var(--accent)';});
+    s.addEventListener('touchend',e=>{e.preventDefault();s.click();},{passive:false});
+    wrap.appendChild(s);
+  }
+  wrap.firstChild.style.borderColor='var(--accent)';   // Rot vorgewählt
+})();
+document.getElementById('hbDraw').addEventListener('click',()=>annSetMode());
+document.getElementById('annPen').addEventListener('click',()=>annSetTool('pen'));
+document.getElementById('annText').addEventListener('click',()=>annSetTool('text'));
+document.getElementById('annUndo').addEventListener('click',()=>{if(annStrokes.length)annStrokes.pop();else if(annTexts.length)annTexts.pop();annRedraw();});
+document.getElementById('annClear').addEventListener('click',()=>{annClearAll();annRedraw();});
+['hbDraw','annPen','annText','annUndo','annClear'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
+annSetTool('pen');
+
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.8';
+const APP_VERSION='3.9';
 const APP_CHANGELOG=[
+  {v:'3.9', date:'2026-07-29', notes:[
+    'Neues Zeichen-/Notiz-Werkzeug im Viewer (✎): Freihand-Markierungen und Textnotizen auf das Modell setzen – mehrere Farben, Rückgängig und Löschen',
+    'Beim Anlegen eines Prüfpunkts werden die Markierungen und Notizen fest ins Modellbild übernommen und erscheinen so im Protokoll (PDF, PNG, Dalux-Paket)',
+  ]},
   {v:'3.8', date:'2026-07-29', notes:[
     'Attribute mit mehreren Werten zeigen jetzt bis zu 10 Werte statt 4 (z.B. „Position number") – sortiert; darüber hinaus „… (N Werte)". Gilt für Oberfläche, PDF und PNG; im PDF bricht ein langer Attributwert bei Bedarf um',
   ]},
