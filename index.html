@@ -1608,8 +1608,10 @@ function ppAttrData(pp){
       bars.forEach(b=>{const v=b.props[k];if(v!==undefined&&v!=='')vals.add(String(v));});
       if(vals.size===1)out.push([k,fmtVal(k,[...vals][0])]);
       else if(vals.size>1){
-        const l=[...vals].slice(0,4).map(v=>fmtVal(k,v)).join(', ');
-        out.push([k,l+(vals.size>4?' … ('+vals.size+' Werte)':'')]);
+        // sortiert und bis zu 10 Werte anzeigen (numerisch, sonst alphabetisch)
+        const arr=[...vals].sort((a,b)=>{const an=parseFloat(a),bn=parseFloat(b);return(!isNaN(an)&&!isNaN(bn))?an-bn:String(a).localeCompare(b);});
+        const l=arr.slice(0,10).map(v=>fmtVal(k,v)).join(', ');
+        out.push([k,l+(vals.size>10?' … ('+vals.size+' Werte)':'')]);
       }
     }
   }
@@ -2162,8 +2164,10 @@ async function ppPDF(pp){
       d.setFont('helvetica','normal');d.setFontSize(9);d.setTextColor(110);
       d.text(String(k).slice(0,40),L+1,y);
       d.setTextColor(20);
-      d.text(String(v).slice(0,58),L+68,y);
-      y+=5.2;
+      // Wert im Spaltenrest umbrechen, damit auch bis zu 10 Werte lesbar bleiben
+      const vlines=d.splitTextToSize(String(v),R-(L+68));
+      vlines.forEach((ln,li)=>d.text(ln,L+68,y+li*4.6));
+      y+=Math.max(5.2,vlines.length*4.6+0.6);
     }
     y+=3.5;
   }
@@ -2186,7 +2190,7 @@ async function ppPDF(pp){
     need(8);
     d.setFont('helvetica','normal');d.setFontSize(9.5);d.setTextColor(20);
     d.text(String(k.text||'').slice(0,42),L+1,y);
-    if(k.soll){d.setTextColor(90);d.text(String(k.soll).slice(0,20),sollX,y,{align:'right'});d.setTextColor(20);}
+    if(k.soll){d.setFontSize(8.3);d.setTextColor(90);d.text(String(k.soll).slice(0,60),sollX,y,{align:'right'});d.setTextColor(20);d.setFontSize(9.5);}
     pdfBox(d,cx[0],y-3.3,4.2,voll&&k.status==='io','check');
     pdfBox(d,cx[1],y-3.3,4.2,voll&&k.status==='nio','x');
     d.setDrawColor(228);d.setLineWidth(.2);d.line(L,y+2.4,R,y+2.4);
@@ -2349,7 +2353,7 @@ async function ppProtokollPNG(pp){
   for(const k of krit){
     font(16);x.fillStyle=C.ink;x.textAlign='left';
     x.fillText(String(k.text||'').slice(0,52),m,y+4);
-    if(k.soll){font(15);x.fillStyle=C.soll;x.textAlign='right';x.fillText(String(k.soll).slice(0,24),sollR,y+4);x.textAlign='left';}
+    if(k.soll){font(13);x.fillStyle=C.soll;x.textAlign='right';x.fillText(String(k.soll).slice(0,56),sollR,y+4);x.textAlign='left';font(16);}
     checkbox(cb1,y-16,bs,voll&&k.status==='io','check');
     checkbox(cb2,y-16,bs,voll&&k.status==='nio','x');
     x.strokeStyle='#e6eaf0';x.lineWidth=1;x.beginPath();x.moveTo(m,y+16);x.lineTo(R,y+16);x.stroke();
@@ -3594,12 +3598,16 @@ ppLiveLabel();
 
 
 
+
 // ── App-Version & Changelog ──────────────────────────────────────────────────
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.7';
+const APP_VERSION='3.8';
 const APP_CHANGELOG=[
+  {v:'3.8', date:'2026-07-29', notes:[
+    'Attribute mit mehreren Werten zeigen jetzt bis zu 10 Werte statt 4 (z.B. „Position number") – sortiert; darüber hinaus „… (N Werte)". Gilt für Oberfläche, PDF und PNG; im PDF bricht ein langer Attributwert bei Bedarf um',
+  ]},
   {v:'3.7', date:'2026-07-28', notes:[
     '„📷 Als Bild übernehmen" in der Live-Ansicht: die aktuell eingestellte Drehung/Zoom wird als Modellbild des Prüfpunkts übernommen und erscheint so in Protokoll, PDF, PNG und Dalux-Paket',
     'Behoben: im Abnahme-Tab lieferte die Aufnahme ein leeres Bild (verborgener Viewer, Canvas-Breite 0); jetzt wird eine feste Aufnahmegröße erzwungen',
