@@ -303,6 +303,7 @@ select.sb-inp{appearance:none}
       <div id="annBar" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:4;background:var(--glass);border:1px solid var(--border);border-radius:10px;padding:6px 8px;backdrop-filter:blur(8px);align-items:center;gap:6px;flex-wrap:wrap;max-width:calc(100% - 20px)">
         <button class="btn btn-s" id="annPen"  title="Freihand zeichnen" style="font-size:16px;padding:4px 9px">✏️</button>
         <button class="btn btn-s" id="annText" title="Text/Notiz setzen" style="font-size:16px;padding:4px 9px">T</button>
+        <button class="btn btn-s" id="annMove" title="Markierung/Notiz verschieben" style="font-size:16px;padding:4px 9px">✋</button>
         <span id="annColors" style="display:inline-flex;gap:4px;align-items:center;margin:0 2px"></span>
         <button class="btn btn-s" id="annUndo" title="Letztes rückgängig" style="font-size:15px;padding:4px 9px">↶</button>
         <button class="btn btn-d" id="annClear" title="Alle Markierungen löschen" style="font-size:15px;padding:4px 9px">🗑</button>
@@ -3657,16 +3658,53 @@ function annRedraw(){
   annDrawTo(annCtx,annCv.width,annCv.height);
 }
 function annNorm(e){const r=annCv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height,cx:e.clientX,cy:e.clientY};}
+// Trefferprüfung fürs Verschieben (px,py normalisiert). Zuletzt gesetzte zuerst.
+function annHitText(px,py){
+  const W=annCv.width||annCv.clientWidth,H=annCv.height||annCv.clientHeight;
+  for(let i=annTexts.length-1;i>=0;i--){const t=annTexts[i];
+    const fs=Math.max(11,t.size*H);annCtx.font='700 '+fs+'px Arial,sans-serif';
+    const tw=annCtx.measureText(t.text).width,pad=fs*0.28;
+    const x0=t.x*W-pad,y0=t.y*H-pad,mx=px*W,my=py*H;
+    if(mx>=x0&&mx<=x0+tw+2*pad&&my>=y0&&my<=y0+fs+2*pad)return t;
+  }
+  return null;
+}
+function annHitStroke(px,py){
+  const W=annCv.width||annCv.clientWidth,H=annCv.height||annCv.clientHeight;
+  const mx=px*W,my=py*H,thr=Math.max(12,0.015*H);
+  for(let i=annStrokes.length-1;i>=0;i--){const s=annStrokes[i];
+    for(const p of s.pts){const dx=p.x*W-mx,dy=p.y*H-my;if(dx*dx+dy*dy<=thr*thr)return s;}
+  }
+  return null;
+}
+let annDrag=null;
 annCv.addEventListener('pointerdown',e=>{
   if(!drawMode)return;e.preventDefault();
   const p=annNorm(e);
+  if(annTool==='move'){
+    const t=annHitText(p.x,p.y),el=t||annHitStroke(p.x,p.y);
+    if(el){annDrag={el,type:t?'text':'stroke',lx:p.x,ly:p.y};annCv.style.cursor='grabbing';try{annCv.setPointerCapture(e.pointerId);}catch(_){}}
+    return;
+  }
   if(annTool==='text'){annPlaceText(p);return;}
   annCur={color:annColor,w:0.006,pts:[{x:p.x,y:p.y}]};annStrokes.push(annCur);
   try{annCv.setPointerCapture(e.pointerId);}catch(_){}
 });
-annCv.addEventListener('pointermove',e=>{if(!drawMode||annTool!=='pen'||!annCur)return;e.preventDefault();const p=annNorm(e);annCur.pts.push({x:p.x,y:p.y});annRedraw();});
-annCv.addEventListener('pointerup',()=>{annCur=null;});
-annCv.addEventListener('pointercancel',()=>{annCur=null;});
+annCv.addEventListener('pointermove',e=>{
+  if(!drawMode)return;
+  if(annTool==='move'){
+    const p=annNorm(e);
+    if(annDrag){e.preventDefault();const dx=p.x-annDrag.lx,dy=p.y-annDrag.ly;annDrag.lx=p.x;annDrag.ly=p.y;
+      if(annDrag.type==='text'){annDrag.el.x+=dx;annDrag.el.y+=dy;}else for(const pt of annDrag.el.pts){pt.x+=dx;pt.y+=dy;}
+      annRedraw();
+    } else annCv.style.cursor=(annHitText(p.x,p.y)||annHitStroke(p.x,p.y))?'grab':'move';
+    return;
+  }
+  if(annTool!=='pen'||!annCur)return;
+  e.preventDefault();const p=annNorm(e);annCur.pts.push({x:p.x,y:p.y});annRedraw();
+});
+annCv.addEventListener('pointerup',()=>{annCur=null;if(annDrag){annDrag=null;annCv.style.cursor=annTool==='move'?'move':'crosshair';}});
+annCv.addEventListener('pointercancel',()=>{annCur=null;annDrag=null;});
 function annPlaceText(p){
   const vca=document.querySelector('.v-ca'),r=vca.getBoundingClientRect();
   const inp=document.createElement('input');inp.type='text';inp.placeholder='Notiz…';
@@ -3694,6 +3732,8 @@ function annSetTool(t){
   annTool=t;
   document.getElementById('annPen').classList.toggle('on-io',t==='pen');
   document.getElementById('annText').classList.toggle('on-io',t==='text');
+  document.getElementById('annMove').classList.toggle('on-io',t==='move');
+  if(drawMode)annCv.style.cursor=t==='move'?'move':'crosshair';
 }
 (function annColorSwatches(){
   const wrap=document.getElementById('annColors');if(!wrap)return;
@@ -3710,10 +3750,12 @@ function annSetTool(t){
 document.getElementById('hbDraw').addEventListener('click',()=>annSetMode());
 document.getElementById('annPen').addEventListener('click',()=>annSetTool('pen'));
 document.getElementById('annText').addEventListener('click',()=>annSetTool('text'));
+document.getElementById('annMove').addEventListener('click',()=>annSetTool('move'));
 document.getElementById('annUndo').addEventListener('click',()=>{if(annStrokes.length)annStrokes.pop();else if(annTexts.length)annTexts.pop();annRedraw();});
 document.getElementById('annClear').addEventListener('click',()=>{annClearAll();annRedraw();});
-['hbDraw','annPen','annText','annUndo','annClear'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
+['hbDraw','annPen','annText','annMove','annUndo','annClear'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',e=>{e.preventDefault();el.click();},{passive:false});});
 annSetTool('pen');
+
 
 
 // ── App-Version & Changelog ──────────────────────────────────────────────────
@@ -3724,6 +3766,7 @@ const APP_VERSION='3.9';
 const APP_CHANGELOG=[
   {v:'3.9', date:'2026-07-29', notes:[
     'Neues Zeichen-/Notiz-Werkzeug im Viewer (✎): Freihand-Markierungen und Textnotizen auf das Modell setzen – mehrere Farben, Rückgängig und Löschen',
+    'Verschieben-Werkzeug (✋): gesetzte Notizen und Markierungen frei anfassen und ziehen',
     'Beim Anlegen eines Prüfpunkts werden die Markierungen und Notizen fest ins Modellbild übernommen und erscheinen so im Protokoll (PDF, PNG, Dalux-Paket)',
   ]},
   {v:'3.8', date:'2026-07-29', notes:[
