@@ -174,6 +174,16 @@ th.num{text-align:right}
 .ab-right{width:240px;background:var(--panel);border-left:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
 .ab-item{display:flex;align-items:center;gap:7px;padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--line);touch-action:manipulation;transition:background .1s;font-size:16.5px}
 .ab-item:hover{background:var(--hover)}.ab-item.active{background:var(--sel)}
+/* Ein-/ausklappbare, größenverstellbare Seitenpanels im Abnahme-Tab */
+.ab-left,.ab-right{position:relative;overflow:hidden}
+.ab-left.collapsed,.ab-right.collapsed{width:36px!important;min-width:36px}
+.ab-left.collapsed>.sb-head,.ab-right.collapsed>.sb-head{padding:8px 6px;display:flex;justify-content:center;border-bottom:none}
+.ab-left.collapsed .sb-head-info,.ab-right.collapsed .sb-head-info,
+.ab-left.collapsed .ab-panel-body,.ab-right.collapsed .ab-panel-body{display:none}
+.ab-collapse-btn{flex-shrink:0;width:20px;height:20px;border-radius:4px;border:1px solid var(--border);background:var(--card);color:var(--muted);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;touch-action:manipulation}
+.ab-collapse-btn:hover{border-color:var(--accent);color:var(--accent)}
+.ab-resizer{width:6px;flex-shrink:0;cursor:col-resize;background:transparent;touch-action:none}
+.ab-resizer:hover,.ab-resizer.active{background:var(--accent)}
 /* OVERLAY */
 .ov{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg);z-index:50}
 .dz{border:2px dashed var(--border);border-radius:12px;padding:40px 50px;text-align:center;cursor:pointer;transition:all .2s;max-width:380px;width:90%}
@@ -404,13 +414,16 @@ select.sb-inp{appearance:none}
   <div class="ab-wrap">
 
     <!-- LINKS: Prüfpunktliste -->
-    <div class="ab-left">
-      <div class="sb-head">
-        <div class="sb-label">Prüfpunkte</div>
-        <div id="ppProg" style="font-size:15px;color:var(--muted);margin-top:3px">–</div>
+    <div class="ab-left" id="abLeft">
+      <div class="sb-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
+        <div class="sb-head-info">
+          <div class="sb-label">Prüfpunkte</div>
+          <div id="ppProg" style="font-size:15px;color:var(--muted);margin-top:3px">–</div>
+        </div>
+        <button class="ab-collapse-btn" id="abLeftToggle" title="Einklappen">‹</button>
       </div>
-      <div class="sb-list" id="ppList"></div>
-      <div style="padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
+      <div class="sb-list ab-panel-body" id="ppList"></div>
+      <div class="ab-panel-body" style="padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
         <div class="hd-lbl">Kästchen im Export</div>
         <select class="sb-inp" id="ppBoxMode" style="margin-bottom:3px">
           <option value="leer">leer – vor Ort abhaken</option>
@@ -432,6 +445,7 @@ select.sb-inp{appearance:none}
         <input type="file" accept=".json,application/json" id="ppLoadFile" style="display:none">
       </div>
     </div>
+    <div class="ab-resizer" id="abResizeL" title="Ziehen: Breite ändern"></div>
 
     <!-- MITTE: gewählter Prüfpunkt -->
     <div class="ab-ctr" id="ppCtr">
@@ -541,10 +555,14 @@ select.sb-inp{appearance:none}
       </div>
     </div>
 
+    <div class="ab-resizer" id="abResizeR" title="Ziehen: Breite ändern"></div>
     <!-- RECHTS: Protokollkopf + Kriterienvorlage -->
-    <div class="ab-right">
-      <div class="sb-head"><div class="sb-label">Protokollkopf</div></div>
-      <div style="flex:1;overflow-y:auto;padding:9px 11px">
+    <div class="ab-right" id="abRight">
+      <div class="sb-head" style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px">
+        <div class="sb-head-info"><div class="sb-label">Protokollkopf</div></div>
+        <button class="ab-collapse-btn" id="abRightToggle" title="Einklappen">›</button>
+      </div>
+      <div class="ab-panel-body" style="flex:1;overflow-y:auto;padding:9px 11px">
         <div class="hd-lbl">Bauvorhaben</div><input class="hd-inp" id="hdBv" data-hd="bv" placeholder="z.B. Neubau Halle 4">
         <div class="hd-lbl">Bauteil</div><input class="hd-inp" id="hdBt" data-hd="bt" placeholder="z.B. Bodenplatte BA 1">
         <div class="hd-lbl">Achse / Abschnitt</div><input class="hd-inp" id="hdAc" data-hd="ac" placeholder="z.B. A–F / 1–12">
@@ -562,7 +580,7 @@ select.sb-inp{appearance:none}
         <div style="font-size:12px;color:var(--muted);line-height:1.5;margin:4px 0 7px">Gilt für neu angelegte Prüfpunkte. Wird im Browser gespeichert.</div>
         <div id="tplList"></div>
       </div>
-      <div style="padding:8px 12px;border-top:1px solid var(--border);font-size:15px;display:flex;flex-direction:column;gap:2px">
+      <div class="ab-panel-body" style="padding:8px 12px;border-top:1px solid var(--border);font-size:15px;display:flex;flex-direction:column;gap:2px">
         <span id="ppOkCnt" style="color:var(--ok)">i.O. 0</span>
         <span id="ppNioCnt" style="color:var(--err)">n.i.O. 0</span>
         <span id="ppOffCnt" style="color:var(--muted)">offen 0</span>
@@ -3343,6 +3361,42 @@ function makeResizable(el,minW,minH){
   document.addEventListener('touchend',end);
 }
 
+// ── Größenverstellbare / einklappbare Seitenpanels im Abnahme-Tab ───────────
+function setupResizablePanel(panel,resizer,toggleBtn,cfg){
+  if(!panel||!resizer)return;
+  const{side,min,max,defaultW,key}=cfg;
+  let collapsed=localStorage.getItem(key+'_c')==='1';
+  let width=Math.max(min,Math.min(max,parseInt(localStorage.getItem(key+'_w'))||defaultW));
+  function apply(){
+    panel.classList.toggle('collapsed',collapsed);
+    panel.style.width=collapsed?'':width+'px';
+    if(toggleBtn)toggleBtn.textContent=side==='left'?(collapsed?'›':'‹'):(collapsed?'‹':'›');
+    if(toggleBtn)toggleBtn.title=collapsed?'Ausklappen':'Einklappen';
+  }
+  function save(){localStorage.setItem(key+'_w',width);localStorage.setItem(key+'_c',collapsed?'1':'0');}
+  apply();
+  if(toggleBtn)toggleBtn.addEventListener('click',()=>{collapsed=!collapsed;apply();save();});
+  let sx=0,sw=0,dragging=false,moved=false;
+  function start(cx){if(collapsed)return;sx=cx;sw=width;dragging=true;moved=false;resizer.classList.add('active');}
+  function move(cx){
+    if(!dragging)return;
+    const dx=cx-sx;
+    if(Math.abs(dx)>3)moved=true;
+    if(!moved)return;
+    width=Math.max(min,Math.min(max,sw+(side==='left'?dx:-dx)));
+    panel.style.width=width+'px';
+  }
+  function end(){if(!dragging)return;dragging=false;resizer.classList.remove('active');if(moved)save();}
+  resizer.addEventListener('mousedown',e=>{e.preventDefault();start(e.clientX);});
+  window.addEventListener('mousemove',e=>move(e.clientX));
+  window.addEventListener('mouseup',end);
+  resizer.addEventListener('touchstart',e=>{if(e.touches.length!==1)return;start(e.touches[0].clientX);},{passive:true});
+  resizer.addEventListener('touchmove',e=>{if(!dragging||e.touches.length!==1)return;move(e.touches[0].clientX);},{passive:true});
+  resizer.addEventListener('touchend',end,{passive:true});
+}
+setupResizablePanel(document.getElementById('abLeft'), document.getElementById('abResizeL'),document.getElementById('abLeftToggle'), {side:'left', min:160,max:420,defaultW:220,key:'abLeftPanel'});
+setupResizablePanel(document.getElementById('abRight'),document.getElementById('abResizeR'),document.getElementById('abRightToggle'),{side:'right',min:180,max:440,defaultW:240,key:'abRightPanel'});
+
 makeDraggable(document.getElementById('vInfo'),        document.getElementById('vInfoHdr'));
 makeDraggable(document.getElementById('mp'),           document.getElementById('mpHdr'));
 makeDraggable(document.getElementById('vInfoSettings'),document.getElementById('vInfoSettingsHdr'));
@@ -3775,8 +3829,11 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.10';
+const APP_VERSION='3.11';
 const APP_CHANGELOG=[
+  {v:'3.11', date:'2026-08-04', notes:[
+    'Abnahme-Tab: Prüfpunkte-Liste links und Protokollkopf rechts sind jetzt in der Breite verstellbar (Ziehen am Rand) und einklappbar (‹/›-Knopf), damit in der Mitte mehr Platz fürs Modellbild bleibt. Größe/Zustand werden gemerkt',
+  ]},
   {v:'3.10', date:'2026-08-04', notes:[
     'Behoben: Antippen zum Ein-/Ausblenden von Positionen (Viewer & Editor) sowie Prüfpunkte-Liste reagierte auch beim Scrollen der Liste – ein Wischen löste versehentlich einen Klick aus. Jetzt wird nur noch als Tap gewertet, wenn der Finger sich beim Loslassen kaum bewegt hat',
   ]},
