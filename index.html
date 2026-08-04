@@ -901,6 +901,24 @@ let sumKeys=new Set(['BarCount','BarLength','Masse']),sumAllKeys=[];
 const protokoll={};
 let abCurPos=null;
 
+// Tap-Handler für Einträge in scrollbaren Listen: unterscheidet Antippen von Scrollen,
+// damit ein Wischen zum Scrollen nicht gleichzeitig den Eintrag umschaltet.
+function addTap(el,handler){
+  el.addEventListener('click',handler);
+  let sx=0,sy=0,tracking=false;
+  el.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1)return;
+    sx=e.touches[0].clientX;sy=e.touches[0].clientY;tracking=true;
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    if(!tracking||e.touches.length!==1)return;
+    if(Math.hypot(e.touches[0].clientX-sx,e.touches[0].clientY-sy)>10)tracking=false;
+  },{passive:true});
+  el.addEventListener('touchend',e=>{
+    if(!tracking)return;
+    tracking=false;e.preventDefault();handler(e);
+  },{passive:false});
+}
 function setP(p,t){document.getElementById('pf').style.width=p+'%';document.getElementById('ldTxt').textContent=t;}
 function tick(){return new Promise(r=>setTimeout(r,10));}
 function toast(msg,type){
@@ -1088,15 +1106,13 @@ function updateV3D(){
   const vl=document.getElementById('vList');vl.innerHTML='';
   const ai=document.createElement('div');ai.className='si'+(visGroups.size===0?' active':'');
   ai.innerHTML='<div class="si-dot" style="background:var(--muted)"></div><span>Alle</span><span class="si-cnt">'+meshes.length+'</span>';
-  ai.addEventListener('click',()=>{visGroups.clear();applyGroupFilter();syncGroupActive();});
+  addTap(ai,()=>{visGroups.clear();applyGroupFilter();syncGroupActive();});
   vl.appendChild(ai);
   Object.entries(posG).sort((a,b)=>{const an=parseInt(a[0]),bn=parseInt(b[0]);return isNaN(an)||isNaN(bn)?a[0].localeCompare(b[0]):an-bn;}).forEach(([g,d])=>{
     const item=document.createElement('div');item.className='si'+(visGroups.has(g)?' active':'');item.dataset.grp=g;
     const lbl=g.length>18?g.slice(0,16)+'...':g;
     item.innerHTML='<div class="si-dot" style="background:'+d.color+'"></div><span title="'+esc(g)+'">'+esc(lbl)+'</span><span class="si-cnt">'+d.cnt+'</span>';
-    function toggle(){if(visGroups.has(g))visGroups.delete(g);else visGroups.add(g);applyGroupFilter();syncGroupActive();}
-    item.addEventListener('click',toggle);
-    item.addEventListener('touchend',e=>{e.preventDefault();toggle();},{passive:false});
+    addTap(item,()=>{if(visGroups.has(g))visGroups.delete(g);else visGroups.add(g);applyGroupFilter();syncGroupActive();});
     vl.appendChild(item);
   });
   document.getElementById('vFoot').textContent=Object.keys(posG).length+' Gr.';
@@ -1290,15 +1306,13 @@ function buildGrpList(){
   const sorted=Object.entries(groups).filter(([k])=>k.toLowerCase().includes(q)).sort((a,b)=>{const an=parseInt(a[0]),bn=parseInt(b[0]);return isNaN(an)||isNaN(bn)?a[0].localeCompare(b[0]):an-bn;});
   const all=document.createElement('div');all.className='si'+(fltGrp===null?' active':'');
   all.innerHTML='<div class="si-dot" style="background:var(--muted)"></div><span>Alle</span><span class="si-cnt">'+BARS.length+'</span>';
-  all.addEventListener('click',()=>{fltGrp=null;buildGrpList();renderTable();});
-  all.addEventListener('touchend',e=>{e.preventDefault();fltGrp=null;buildGrpList();renderTable();},{passive:false});
+  addTap(all,()=>{fltGrp=null;buildGrpList();renderTable();});
   gl.appendChild(all);
   sorted.forEach(([g,cnt])=>{
     const item=document.createElement('div');item.className='si'+(fltGrp===g?' active':'');
     const lbl=g.length>16?g.slice(0,14)+'...':g;
     item.innerHTML='<div class="si-dot" style="background:'+gc(g)+'"></div><span title="'+esc(g)+'">'+esc(lbl)+'</span><span class="si-cnt">'+cnt+'</span>';
-    item.addEventListener('click',()=>{fltGrp=g;buildGrpList();renderTable();});
-    item.addEventListener('touchend',e=>{e.preventDefault();fltGrp=g;buildGrpList();renderTable();},{passive:false});
+    addTap(item,()=>{fltGrp=g;buildGrpList();renderTable();});
     gl.appendChild(item);
   });
   document.getElementById('grpFoot').textContent=sorted.length+' Gruppen';
@@ -1907,8 +1921,7 @@ function ppRenderList(){
       +(ppFremd(pp)?'<span title="aus einer anderen IFC-Datei" style="color:var(--warn)">⚠ </span>':'')
       +esc(pp.titel||'(ohne Bezeichnung)')+'</div>'
       +'<div style="font-size:13.5px;color:'+st.col+'">'+esc(st.txt)+'</div></div>';
-    it.addEventListener('click',()=>ppOpen(pp));
-    it.addEventListener('touchend',e=>{e.preventDefault();ppOpen(pp);},{passive:false});
+    addTap(it,()=>ppOpen(pp));
     l.appendChild(it);
   });
   document.getElementById('ppProg').textContent=PP.length?PP.length+' Prüfpunkte':'–';
@@ -3762,8 +3775,11 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.9';
+const APP_VERSION='3.10';
 const APP_CHANGELOG=[
+  {v:'3.10', date:'2026-08-04', notes:[
+    'Behoben: Antippen zum Ein-/Ausblenden von Positionen (Viewer & Editor) sowie Prüfpunkte-Liste reagierte auch beim Scrollen der Liste – ein Wischen löste versehentlich einen Klick aus. Jetzt wird nur noch als Tap gewertet, wenn der Finger sich beim Loslassen kaum bewegt hat',
+  ]},
   {v:'3.9', date:'2026-07-29', notes:[
     'Neues Zeichen-/Notiz-Werkzeug im Viewer (✎): Freihand-Markierungen und Textnotizen auf das Modell setzen – mehrere Farben, Rückgängig und Löschen',
     'Verschieben-Werkzeug (✋): gesetzte Notizen und Markierungen frei anfassen und ziehen',
