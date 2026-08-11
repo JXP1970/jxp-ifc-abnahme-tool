@@ -2368,6 +2368,32 @@ function ppFotos(pp){
   }
   return pp.fotos;
 }
+// Handyfotos haben heute 12 MP und mehr. Sie stecken als Base64 in der
+// gesicherten Abnahme, im PDF und im ZIP – ungerechnet wäre die Datei nach ein
+// paar Prüfpunkten hunderte MB groß. Für den Nachweis genügt die lange Kante mit
+// 1600 px; das reicht auch fürs PDF (dort ist ein Foto höchstens ~90 mm breit).
+const FOTO_MAX=1600, FOTO_Q=.85;
+// Gibt {src,w,h} zurück – unverändert, wenn das Bild schon klein genug ist.
+function fotoSkaliert(img,src){
+  const w=img.naturalWidth,h=img.naturalHeight,lang=Math.max(w,h);
+  if(!w||!h)return null;
+  if(lang<=FOTO_MAX)return {src,w,h};
+  const s=FOTO_MAX/lang,nw=Math.round(w*s),nh=Math.round(h*s);
+  const cv=document.createElement('canvas');cv.width=nw;cv.height=nh;
+  const cx=cv.getContext('2d');
+  cx.fillStyle='#fff';cx.fillRect(0,0,nw,nh);   // gegen schwarze Ränder bei Bildern mit Alpha
+  cx.drawImage(img,0,0,nw,nh);
+  // Verkleinerte Bilder werden als JPEG abgelegt – bei Fotos um ein Vielfaches
+  // kleiner als PNG. Kleine Bilder behalten ihr Ursprungsformat.
+  return {src:cv.toDataURL('image/jpeg',FOTO_Q),w:nw,h:nh};
+}
+function fotoBytes(src){
+  const b=(src||'').split(',')[1]||'';
+  return Math.round(b.length*3/4);
+}
+function fotoGroesse(bytes){
+  return bytes>=1048576?(bytes/1048576).toFixed(1).replace('.',',')+' MB':Math.max(1,Math.round(bytes/1024))+' KB';
+}
 // Mehrere Dateien gleichzeitig einlesen. Die Plätze werden vorab in Auswahl-
 // reihenfolge belegt, weil die Lesevorgänge unterschiedlich schnell fertig werden.
 function ppFotoAdd(box,files,fertig){
@@ -2385,7 +2411,11 @@ function ppFotoAdd(box,files,fertig){
     const r=new FileReader();
     r.onload=ev=>{
       const img=new Image();
-      img.onload=()=>{ziel[start+i]={src:ev.target.result,name:file.name||'',w:img.naturalWidth,h:img.naturalHeight};ab();};
+      img.onload=()=>{
+        const s=fotoSkaliert(img,ev.target.result);
+        if(s)ziel[start+i]={src:s.src,name:file.name||'',w:s.w,h:s.h};
+        ab();
+      };
       img.onerror=ab;
       img.src=ev.target.result;
     };
@@ -2397,7 +2427,9 @@ function ppFotoAdd(box,files,fertig){
 function fotoGalRender(galId,nameId,list,refresh){
   const gal=document.getElementById(galId);if(!gal)return;
   const nm=document.getElementById(nameId);
-  if(nm)nm.textContent=list.length?list.length+(list.length===1?' Bild':' Bilder'):'';
+  if(nm)nm.textContent=list.length
+    ? list.length+(list.length===1?' Bild · ':' Bilder · ')+fotoGroesse(list.reduce((s,f)=>s+fotoBytes(f.src),0))
+    : '';
   gal.innerHTML=list.map((f,i)=>
      '<div style="position:relative">'
     +'<img src="'+f.src+'" data-i="'+i+'" class="foto-thumb" title="'+esc(f.name||'')+'" '
@@ -3052,9 +3084,13 @@ document.getElementById('ppFotoPickBtn').addEventListener('click',()=>document.g
   e.target.value='';
   if(!files||!files.length||!ppCur)return;
   const pp=ppCur;
+  const vorher=ppFotos(pp).length;
   ppFotoAdd(pp,files,()=>{
     if(ppCur===pp)ppRenderFotos();
-    toast(files.length>1?files.length+' Bilder hinzugefügt':'Bild hinzugefügt');
+    const neu=ppFotos(pp).slice(vorher);
+    if(!neu.length){toast('Bild konnte nicht gelesen werden','warn');return;}
+    toast((neu.length>1?neu.length+' Bilder':'Bild')+' hinzugefügt · '
+          +fotoGroesse(neu.reduce((s,f)=>s+fotoBytes(f.src),0)));
   });
 }));
 document.getElementById('ppAttrCfg').addEventListener('click',ppAttrModalOpen);
@@ -4188,6 +4224,7 @@ const APP_CHANGELOG=[
     'Die Fotos erscheinen als Vorschaustreifen mit Nummer; Antippen zeigt das Bild groß, ✕ entfernt es einzeln',
     'Auch die Stichprobe nimmt mehrere Fotos auf',
     'Mehrere Fotos werden im PDF und im Protokoll-PNG zweispaltig und durchnummeriert ausgegeben; im Dalux-/ZIP-Paket liegen sie als _Foto01, _Foto02 … bei',
+    'Hinzugefügte Bilder werden automatisch auf 1600 px lange Kante heruntergerechnet (JPEG) – ein 12-MP-Handyfoto schrumpft damit von rund 5 MB auf etwa 300 KB, ohne dass die Nachweisqualität im PDF leidet. Neben der Anzahl steht jetzt der belegte Speicher',
     'Ältere gesicherte Abnahmen (bis V3.12) mit einem einzelnen Foto lassen sich unverändert laden – das Bild wird als erstes Foto übernommen',
   ]},
   {v:'3.12', date:'2026-08-11', notes:[
