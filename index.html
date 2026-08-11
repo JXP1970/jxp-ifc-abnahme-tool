@@ -695,6 +695,130 @@ function ifcEscape(s){
   return out;
 }
 
+// ── Geometrie-Mathematik für Volumenkörper-Geometrie ─────────────────────────
+// Eine Matrix ist ein 12er-Array: die drei Basisvektoren X,Y,Z (je 3) und
+// danach die Verschiebung T. Punkt p wird abgebildet als X*px+Y*py+Z*pz+T.
+const MID=[1,0,0, 0,1,0, 0,0,1, 0,0,0];
+function mMul(a,b){
+  const r=new Array(12);
+  for(let c=0;c<3;c++){
+    const bx=b[c*3],by=b[c*3+1],bz=b[c*3+2];
+    r[c*3  ]=a[0]*bx+a[3]*by+a[6]*bz;
+    r[c*3+1]=a[1]*bx+a[4]*by+a[7]*bz;
+    r[c*3+2]=a[2]*bx+a[5]*by+a[8]*bz;
+  }
+  const tx=b[9],ty=b[10],tz=b[11];
+  r[9] =a[0]*tx+a[3]*ty+a[6]*tz+a[9];
+  r[10]=a[1]*tx+a[4]*ty+a[7]*tz+a[10];
+  r[11]=a[2]*tx+a[5]*ty+a[8]*tz+a[11];
+  return r;
+}
+function mApply(m,p){
+  return [m[0]*p[0]+m[3]*p[1]+m[6]*p[2]+m[9],
+          m[1]*p[0]+m[4]*p[1]+m[7]*p[2]+m[10],
+          m[2]*p[0]+m[5]*p[1]+m[8]*p[2]+m[11]];
+}
+// Inverse einer Drehung ohne Skalierung (Basis transponieren) – reicht für
+// IFCAXIS2PLACEMENT3D, das immer orthonormal ist.
+function mInv(m){
+  const t=[-(m[0]*m[9]+m[1]*m[10]+m[2]*m[11]),
+           -(m[3]*m[9]+m[4]*m[10]+m[5]*m[11]),
+           -(m[6]*m[9]+m[7]*m[10]+m[8]*m[11])];
+  return [m[0],m[3],m[6], m[1],m[4],m[7], m[2],m[5],m[8], t[0],t[1],t[2]];
+}
+function vNorm(v){const l=Math.hypot(v[0],v[1],v[2]);return l>1e-12?[v[0]/l,v[1]/l,v[2]/l]:null;}
+function vCross(a,b){return [a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];}
+function vDot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+// Beliebiger Vektor senkrecht zu d
+function vPerp(d){
+  const a=Math.abs(d[0])<0.9?[1,0,0]:[0,1,0];
+  return vNorm(vCross(d,a))||[0,1,0];
+}
+// Gram-Schmidt: aus Z-Achse und Referenz-X eine orthonormale Basis bauen
+function axisMat(loc,axis,ref){
+  const z=vNorm(axis||[0,0,1])||[0,0,1];
+  let x=ref||[1,0,0];
+  const d=vDot(x,z);
+  x=vNorm([x[0]-d*z[0],x[1]-d*z[1],x[2]-d*z[2]])||vPerp(z);
+  const y=vCross(z,x);
+  return [x[0],x[1],x[2], y[0],y[1],y[2], z[0],z[1],z[2], loc[0],loc[1],loc[2]];
+}
+// IFCCARTESIANTRANSFORMATIONOPERATOR3D(Axis1=X, Axis2=Y, Origin, Scale, Axis3=Z)
+function ctoMat(a1,a2,org,s,a3){
+  const x=vNorm(a1||[1,0,0])||[1,0,0];
+  let y=a2?[a2[0],a2[1],a2[2]]:null;
+  if(y){const d=vDot(y,x);y=vNorm([y[0]-d*x[0],y[1]-d*x[1],y[2]-d*x[2]]);}
+  if(!y)y=vPerp(x);
+  let z=a3?vNorm(vCross(x,y)):vCross(x,y);
+  if(!z)z=vCross(x,y);
+  if(a3&&vDot(z,a3)<0)z=[-z[0],-z[1],-z[2]];
+  const k=(isFinite(s)&&s!==0)?s:1;
+  return [x[0]*k,x[1]*k,x[2]*k, y[0]*k,y[1]*k,y[2]*k, z[0]*k,z[1]*k,z[2]*k, org[0],org[1],org[2]];
+}
+
+// Rohr entlang einer Polylinie erzeugen (IFCSWEPTDISKSOLID). Jedes Teilstück
+// bekommt eigene Ringe, die an den Knicken auf die Winkelhalbierende
+// geschnitten werden – so entstehen an Biegungen keine Einschnürungen.
+function tubeMesh(pts,r,seg,pos,nor){
+  const P=[];
+  for(const p of pts){
+    const q=P[P.length-1];
+    if(!q||Math.abs(q[0]-p[0])>1e-9||Math.abs(q[1]-p[1])>1e-9||Math.abs(q[2]-p[2])>1e-9)P.push(p);
+  }
+  const n=P.length;
+  if(n<2||!(r>0))return;
+  // Das Vieleck liegt im Kreis und wuerde den Stab zu duenn zeigen (bei 8 Ecken
+  // ~10% zu wenig Querschnitt). Radius so aufweiten, dass die Flaeche stimmt.
+  r*=Math.sqrt(Math.PI/(0.5*seg*Math.sin(2*Math.PI/seg)));
+  const D=[];
+  for(let i=0;i<n-1;i++)D.push(vNorm([P[i+1][0]-P[i][0],P[i+1][1]-P[i][1],P[i+1][2]-P[i][2]])||[0,0,1]);
+  // Schnittebenen-Normale je Knoten (Winkelhalbierende der beiden Segmente)
+  const M=[];
+  for(let i=0;i<n;i++){
+    if(i===0)M.push(D[0]);
+    else if(i===n-1)M.push(D[n-2]);
+    else{
+      const a=D[i-1],b=D[i];
+      M.push(vNorm([a[0]+b[0],a[1]+b[1],a[2]+b[2]])||a);
+    }
+  }
+  // Querschnitts-Normale per Paralleltransport, damit sich das Rohr nicht verdreht
+  const cs=[],sn=[];
+  for(let k=0;k<seg;k++){const a=k/seg*Math.PI*2;cs.push(Math.cos(a));sn.push(Math.sin(a));}
+  let N=vPerp(D[0]);
+  const A=new Array(seg),B=new Array(seg),NA=new Array(seg);
+  for(let j=0;j<n-1;j++){
+    const d=D[j];
+    if(j>0){
+      const dp=vDot(N,d);
+      N=vNorm([N[0]-dp*d[0],N[1]-dp*d[1],N[2]-dp*d[2]])||vPerp(d);
+    }
+    const Bv=vCross(d,N);
+    const m0=M[j],m1=M[j+1];
+    let f0=vDot(d,m0),f1=vDot(d,m1);
+    if(Math.abs(f0)<0.2)f0=0; if(Math.abs(f1)<0.2)f1=0;   // zu spitzer Knick: nicht schneiden
+    for(let k=0;k<seg;k++){
+      const u=[N[0]*cs[k]+Bv[0]*sn[k], N[1]*cs[k]+Bv[1]*sn[k], N[2]*cs[k]+Bv[2]*sn[k]];
+      NA[k]=u;
+      const t0=f0?-r*vDot(u,m0)/f0:0, t1=f1?-r*vDot(u,m1)/f1:0;
+      A[k]=[P[j][0]+r*u[0]+t0*d[0], P[j][1]+r*u[1]+t0*d[1], P[j][2]+r*u[2]+t0*d[2]];
+      B[k]=[P[j+1][0]+r*u[0]+t1*d[0], P[j+1][1]+r*u[1]+t1*d[1], P[j+1][2]+r*u[2]+t1*d[2]];
+    }
+    for(let k=0;k<seg;k++){
+      const k2=(k+1)%seg;
+      pushTri(pos,nor,A[k],A[k2],B[k2],NA[k],NA[k2],NA[k2]);
+      pushTri(pos,nor,A[k],B[k2],B[k],NA[k],NA[k2],NA[k]);
+    }
+    // Deckel an den beiden Enden, damit man nicht in das Rohr hineinsieht
+    if(j===0){const nv=[-d[0],-d[1],-d[2]];for(let k=1;k<seg-1;k++)pushTri(pos,nor,A[0],A[k+1],A[k],nv,nv,nv);}
+    if(j===n-2){for(let k=1;k<seg-1;k++)pushTri(pos,nor,B[0],B[k],B[k+1],d,d,d);}
+  }
+}
+function pushTri(pos,nor,p0,p1,p2,n0,n1,n2){
+  pos.push(p0[0],p0[1],p0[2], p1[0],p1[1],p1[2], p2[0],p2[1],p2[2]);
+  nor.push(n0[0],n0[1],n0[2], n1[0],n1[1],n1[2], n2[0],n2[1],n2[2]);
+}
+
 function parseIFC(text){
   setP(10,'Punktlisten...');
   const ptl={};
@@ -728,6 +852,74 @@ function parseIFC(text){
     const m=args.match(/\(([^)]*)\)/);
     if(nm&&m)for(const rid of [...m[1].matchAll(/#\d+/g)].map(x=>x[0]))rep2layer[rid]=nm;
   }
+  // ── Volumenkörper-Geometrie (Allplan/ODA-Export) ───────────────────────────
+  // Bewehrung wird dort nicht als Dreiecksnetz abgelegt, sondern als Rohr
+  // entlang einer Polylinie (IFCSWEPTDISKSOLID), das über IFCMAPPEDITEM
+  // mehrfach eingesetzt wird. Ohne diese Auswertung bleibt der Viewer leer.
+  setP(40,'Volumenkoerper...');
+  const cpt={},dirn={};
+  for(const m of text.matchAll(/(#\d+)\s*=\s*IFCCARTESIANPOINT\s*\(\s*\(([^)]*)\)/g)){
+    const v=m[2].split(',').map(s=>parseFloat(s));
+    cpt[m[1]]=[v[0]||0,v[1]||0,v[2]||0];
+  }
+  for(const m of text.matchAll(/(#\d+)\s*=\s*IFCDIRECTION\s*\(\s*\(([^)]*)\)/g)){
+    const v=m[2].split(',').map(s=>parseFloat(s));
+    dirn[m[1]]=[v[0]||0,v[1]||0,v[2]||0];
+  }
+  const a2p={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCAXIS2PLACEMENT3D'))){
+    const p=args.split(',').map(s=>s.trim());
+    a2p[eid]=axisMat(cpt[p[0]]||[0,0,0],dirn[p[1]],dirn[p[2]]);
+  }
+  const lpRaw=exType(text,'IFCLOCALPLACEMENT'),lpM={};
+  function locMat(id){
+    if(lpM[id])return lpM[id];
+    const a=lpRaw[id]; if(!a)return MID;
+    lpM[id]=MID;                                    // bricht Ringbezüge ab
+    const p=a.split(',').map(s=>s.trim());
+    const rel=p[0]&&p[0][0]==='#'?locMat(p[0]):MID;
+    lpM[id]=mMul(rel,a2p[p[1]]||MID);
+    return lpM[id];
+  }
+  const cto={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCCARTESIANTRANSFORMATIONOPERATOR3D'))){
+    const p=args.split(',').map(s=>s.trim());
+    cto[eid]=ctoMat(dirn[p[0]],dirn[p[1]],cpt[p[2]]||[0,0,0],parseFloat(p[3]),dirn[p[4]]);
+  }
+  const plines={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCPOLYLINE'))){
+    plines[eid]=[...args.matchAll(/#\d+/g)].map(x=>cpt[x[0]]).filter(Boolean);
+  }
+  const swept={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCSWEPTDISKSOLID'))){
+    const p=args.split(',').map(s=>s.trim());
+    const r=parseFloat(p[1]);
+    if(plines[p[0]]&&r>0)swept[eid]={dir:p[0],r};
+  }
+  const repMap={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCREPRESENTATIONMAP'))){
+    const p=args.split(',').map(s=>s.trim());
+    repMap[eid]={org:p[0],rep:p[1]};
+  }
+  const mapItem={};
+  for(const [eid,args] of Object.entries(exType(text,'IFCMAPPEDITEM'))){
+    const p=args.split(',').map(s=>s.trim());
+    mapItem[eid]={src:p[0],tgt:p[1]};
+  }
+  // Alle Rohr-Instanzen einer Repraesentation einsammeln; IFCMAPPEDITEM wird
+  // dabei aufgeloest (Einsetz-Transformation mal Umkehrung des Map-Ursprungs).
+  function collectSwept(repId,mat,out,depth){
+    if(depth>5)return;
+    for(const iid of (reps[repId]||[])){
+      if(swept[iid])out.push({s:swept[iid],m:mat});
+      else if(mapItem[iid]){
+        const mi=mapItem[iid],rm=repMap[mi.src];
+        if(!rm)continue;
+        collectSwept(rm.rep,mMul(mMul(mat,cto[mi.tgt]||MID),mInv(a2p[rm.org]||MID)),out,depth+1);
+      }
+    }
+  }
+
   setP(45,'Properties...');
   const props={};
   for(const [eid,args] of Object.entries(exType(text,'IFCPROPERTYSINGLEVALUE'))){
@@ -766,6 +958,7 @@ function parseIFC(text){
   else if(lenU.includes('MICRO'))scale=1e-6;
   setP(70,'Objekte...');
   const objs=[];
+  let bb=null;   // Modellgrenzen der Rohr-Geometrie in IFC-Weltkoordinaten
   // Bewehrung kann je nach Export als IFCREINFORCINGBAR oder als generischer
   // IFCBUILDINGELEMENTPROXY vorliegen (z.B. nach DESITE / Layer-Konfigurator).
   // Beide haben dieselbe Argumentstruktur (GUID=0, Name=2, Repräsentation=6).
@@ -802,8 +995,41 @@ function parseIFC(text){
         geo={pos,nor};
       }
     }
-    objs.push({id:eid,guid,name,pos:ap['Pos_Nr.']||ap['Position number']||'',props:ap,geo,propEids});
+    // Kein Dreiecksnetz? Dann Rohr-Geometrie aus IFCSWEPTDISKSOLID aufbauen.
+    let sw=null;
+    if(!geo&&shapeId&&prods[shapeId]){
+      const out=[],pm=locMat(parts[5]?.trim());
+      for(const rid of prods[shapeId])collectSwept(rid,pm,out,0);
+      if(out.length){
+        sw=out;
+        for(const it of out)for(const p of plines[it.s.dir]){
+          const w=mApply(it.m,p);
+          if(!bb)bb=[w[0],w[1],w[2],w[0],w[1],w[2]];
+          else for(let k=0;k<3;k++){if(w[k]<bb[k])bb[k]=w[k];if(w[k]>bb[k+3])bb[k+3]=w[k];}
+        }
+      }
+    }
+    objs.push({id:eid,guid,name,pos:ap['Pos_Nr.']||ap['Position number']||'',props:ap,geo,propEids,sw});
   }
+  // Rohre erst jetzt vernetzen: der Modellmittelpunkt steht erst nach dem
+  // Einsammeln aller Instanzen fest (IFC-Weltkoordinaten sind oft riesig).
+  if(bb){
+    setP(85,'Bewehrung...');
+    const mx=(bb[0]+bb[3])/2,my=(bb[1]+bb[4])/2,mz=(bb[2]+bb[5])/2;
+    for(const o of objs){
+      if(!o.sw)continue;
+      const pos=[],nor=[];
+      for(const it of o.sw){
+        const pts=plines[it.s.dir].map(p=>{
+          const w=mApply(it.m,p);
+          return [(w[0]-mx)*scale,(w[2]-mz)*scale,-(w[1]-my)*scale];
+        });
+        tubeMesh(pts,it.s.r*scale,8,pos,nor);
+      }
+      if(pos.length)o.geo={pos:new Float32Array(pos),nor:new Float32Array(nor)};
+    }
+  }
+  for(const o of objs)delete o.sw;
   return objs;
 }
 
@@ -3829,8 +4055,12 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.11';
+const APP_VERSION='3.12';
 const APP_CHANGELOG=[
+  {v:'3.12', date:'2026-08-11', notes:[
+    'Behoben: Dateien aus Allplan (ODA-Export) liessen sich zwar einlesen, das Modell blieb im 3D-Viewer aber unsichtbar. Dort liegt die Bewehrung nicht als Dreiecksnetz, sondern als Rohr entlang einer Polylinie (IFCSWEPTDISKSOLID) vor, das über IFCMAPPEDITEM mehrfach eingesetzt wird – diese Geometrie wird jetzt ausgewertet und dargestellt',
+    'Platzierungen (IFCLOCALPLACEMENT) werden über die gesamte Kette aufgelöst; Modelle mit großen Landeskoordinaten werden korrekt auf den Ursprung gerückt',
+  ]},
   {v:'3.11', date:'2026-08-04', notes:[
     'Abnahme-Tab: Prüfpunkte-Liste links und Protokollkopf rechts sind jetzt in der Breite verstellbar (Ziehen am Rand) und einklappbar (‹/›-Knopf), damit in der Mitte mehr Platz fürs Modellbild bleibt. Größe/Zustand werden gemerkt',
   ]},
