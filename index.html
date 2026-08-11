@@ -3225,9 +3225,12 @@ document.querySelectorAll('[data-hd]').forEach(el=>{
 document.getElementById('ppFotoBtn').addEventListener('click',()=>document.getElementById('ppFoto').click());
 document.getElementById('ppFotoPickBtn').addEventListener('click',()=>document.getElementById('ppFotoPick').click());
 ['ppFoto','ppFotoPick'].forEach(id=>document.getElementById(id).addEventListener('change',e=>{
-  const files=e.target.files;
+  // Erst kopieren, dann den Wähler zurücksetzen: e.target.value='' leert laut
+  // HTML-Spezifikation die Dateiliste – und zwar dasselbe FileList-Objekt, das
+  // e.target.files liefert. Ohne Kopie wären die Bilder hier bereits weg.
+  const files=[...e.target.files];
   e.target.value='';
-  if(!files||!files.length||!ppCur)return;
+  if(!files.length||!ppCur)return;
   const pp=ppCur;
   const vorher=ppFotos(pp).length;
   ppFotoAdd(pp,files,()=>{
@@ -3402,9 +3405,9 @@ function stichRenderFotos(){fotoGalRender('stichFotoGal','stichFotoName',stichFo
 document.getElementById('stichFotoBtn').addEventListener('click',()=>document.getElementById('stichFoto').click());
 document.getElementById('stichFotoPickBtn').addEventListener('click',()=>document.getElementById('stichFotoPick').click());
 ['stichFoto','stichFotoPick'].forEach(id=>document.getElementById(id).addEventListener('change',e=>{
-  const files=e.target.files;
+  const files=[...e.target.files];      // Kopie vor dem Zurücksetzen, siehe ppFoto
   e.target.value='';
-  if(!files||!files.length)return;
+  if(!files.length)return;
   ppFotoAdd(stichFotoBox,files,stichRenderFotos);
 }));
 ['mpStich','stichClose','stichOk','stichAbw','stichFotoBtn','stichFotoPickBtn'].forEach(id=>{
@@ -4366,8 +4369,11 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.14';
+const APP_VERSION='3.15';
 const APP_CHANGELOG=[
+  {v:'3.15', date:'2026-08-11', notes:[
+    'Behoben: In V3.13/V3.14 kamen mit dem iPad aufgenommene oder aus der Galerie gewählte Bilder nicht an – es erschien weder ein Foto noch eine Meldung. Der Datei-Wähler wurde zurückgesetzt, bevor die Auswahl kopiert war; das Zurücksetzen leert aber laut HTML-Spezifikation genau die Liste, aus der die Bilder noch gelesen werden mussten',
+  ]},
   {v:'3.14', date:'2026-08-11', notes:[
     'Automatische Sicherung: Der Stand der Abnahme wird nach jeder Änderung und spätestens beim Wegschalten der App im Gerät gesichert (IndexedDB). Bisher lagen die Prüfpunkte nur im Arbeitsspeicher – wenn iOS den Safari-Tab bei Speicherdruck verworfen hat (typisch auf dem Weg von der Baustelle ins Büro), war die Erfassung weg',
     'Beim Öffnen wird die letzte Sitzung wiederhergestellt; ein Hinweis über der Prüfpunkte-Liste nennt Zeitpunkt und Anzahl und bietet „Verwerfen" an, wenn man doch leer starten will',
