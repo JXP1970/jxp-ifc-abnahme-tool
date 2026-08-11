@@ -422,6 +422,14 @@ select.sb-inp{appearance:none}
         </div>
         <button class="ab-collapse-btn" id="abLeftToggle" title="Einklappen">‹</button>
       </div>
+      <!-- Hinweis nach dem Wiederherstellen einer abgebrochenen Sitzung -->
+      <div id="ppRestoreBar" class="ab-panel-body" style="display:none;margin:0 10px 6px;padding:9px 11px;border:1px solid var(--accent);border-radius:7px;background:var(--accent-bg,rgba(0,105,168,.12))">
+        <div id="ppRestoreTxt" style="font-size:14.5px;line-height:1.5"></div>
+        <div style="display:flex;gap:6px;margin-top:7px">
+          <button class="btn btn-s" id="ppRestoreOk" style="flex:1;padding:5px;font-size:14px">Weiterarbeiten</button>
+          <button class="btn btn-s" id="ppRestoreNo" style="flex:1;padding:5px;font-size:14px" title="Wiederhergestellte Prüfpunkte verwerfen und leer starten">Verwerfen</button>
+        </div>
+      </div>
       <div class="sb-list ab-panel-body" id="ppList"></div>
       <div class="ab-panel-body" style="padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom));border-top:1px solid var(--border);display:flex;flex-direction:column;gap:5px">
         <div class="hd-lbl">Kästchen im Export</div>
@@ -442,6 +450,7 @@ select.sb-inp{appearance:none}
           <button class="btn btn-s" id="ppSave" style="flex:1;padding:7px" title="Alle Prüfpunkte als Datei speichern – zum Weiterarbeiten auf einem anderen Gerät">💾 Sichern</button>
           <button class="btn btn-s" id="ppLoad" style="flex:1;padding:7px" title="Gespeicherte Abnahme-Datei einlesen">📂 Laden</button>
         </div>
+        <div id="ppAutoInfo" style="font-size:13px;color:var(--muted);margin-top:1px" title="Der Stand wird im Gerät gesichert und beim nächsten Öffnen wieder angeboten – auch wenn der Browser die Seite zwischendurch verwirft">–</div>
         <input type="file" accept=".json,application/json" id="ppLoadFile" style="display:none">
       </div>
     </div>
@@ -2115,6 +2124,7 @@ function ppNew(){
   pp.ann=annSnapshot();            // Markierungen/Notizen zum Prüfpunkt sichern
   pp.bildRaw=ppCapture(pp);        // sie sind bereits im Bild enthalten
   PP.push(pp);
+  ppTouch();
   annClearAll();                   // Zeichenebene für den nächsten Prüfpunkt leeren
   ppClearMarks();
   ppOpen(pp);
@@ -2254,12 +2264,12 @@ function ppRenderKrit(){
       si.classList.add('edited');
     });
     row.querySelectorAll('.kb').forEach(b=>{
-      const set=()=>{k.status=(k.status===b.dataset.s)?'':b.dataset.s;ppRenderKrit();ppRenderList();};
+      const set=()=>{k.status=(k.status===b.dataset.s)?'':b.dataset.s;ppRenderKrit();ppRenderList();ppTouch();};
       b.addEventListener('click',set);
       b.addEventListener('touchend',e=>{e.preventDefault();set();},{passive:false});
     });
     const db=row.querySelector('[data-del]');
-    const del=()=>{pp.kriterien.splice(i,1);ppRenderKrit();ppRenderList();};
+    const del=()=>{pp.kriterien.splice(i,1);ppRenderKrit();ppRenderList();ppTouch();};
     db.addEventListener('click',del);
     db.addEventListener('touchend',e=>{e.preventDefault();del();},{passive:false});
     c.appendChild(row);
@@ -2440,7 +2450,7 @@ function fotoGalRender(galId,nameId,list,refresh){
     +'<div style="position:absolute;left:3px;bottom:3px;padding:1px 6px;border-radius:8px;background:rgba(0,0,0,.62);color:#fff;font-size:11.5px">'+(i+1)+'</div>'
     +'</div>').join('');
   gal.querySelectorAll('.foto-del').forEach(b=>{
-    const go=()=>{list.splice(+b.dataset.i,1);if(refresh)refresh();};
+    const go=()=>{list.splice(+b.dataset.i,1);if(refresh)refresh();ppTouch();};
     b.addEventListener('click',go);
     b.addEventListener('touchend',e=>{e.preventDefault();go();},{passive:false});
   });
@@ -2852,18 +2862,19 @@ async function ppProtokollPNG(pp){
 // Die komplette Abnahme wird als eine JSON-Datei gespeichert (inkl. Modellbilder
 // und Fotos), damit sie auf einem anderen Gerät weiterbearbeitet werden kann.
 // Sets werden dafür in Arrays umgewandelt und beim Laden zurückgewandelt.
-function ppSaveState(){
+function ppStateObj(){
   PP.forEach(pp=>ppPosLabel(pp));   // Positions-Bezeichnung sicher hinterlegen
-  return JSON.stringify({
+  return {
     app:'jxp-ifc-abnahme', ver:APP_VERSION, saved:new Date().toISOString(),
     HD:{...HD}, kritTpl:[...kritTpl], ppSeq,
     protoAttrKeys: protoAttrKeys?[...protoAttrKeys]:null,
     protoAttrSum:[...protoAttrSum],
     PP: PP.map(pp=>Object.assign({},pp,{attrKeys: pp.attrKeys?[...pp.attrKeys]:null}))
-  });
+  };
 }
-function ppLoadState(text){
-  const d=JSON.parse(text);
+function ppSaveState(){return JSON.stringify(ppStateObj());}
+function ppLoadState(text){return ppApplyState(JSON.parse(text));}
+function ppApplyState(d){
   if(!d||d.app!=='jxp-ifc-abnahme')throw new Error('Keine gültige Abnahme-Datei');
   Object.assign(HD,{bv:'',bt:'',ac:'',pr:'',fa:'',dt:''},d.HD||{});
   kritTpl=Array.isArray(d.kritTpl)?d.kritTpl:[];
@@ -2895,13 +2906,145 @@ document.getElementById('ppLoadFile').addEventListener('change',e=>{
   if(PP.length&&!confirm('Aktuelle Abnahme ('+PP.length+' Prüfpunkte) durch die geladene Datei ersetzen?')){e.target.value='';return;}
   const r=new FileReader();
   r.onload=ev=>{
-    try{const n=ppLoadState(ev.target.result);toast(n+' Prüfpunkte geladen');}
+    try{const n=ppLoadState(ev.target.result);ppTouch();toast(n+' Prüfpunkte geladen');}
     catch(err){toast('Fehler: '+err.message,'err');}
   };
   r.readAsText(file);
   e.target.value='';
 });
 ['ppSave','ppLoad'].forEach(id=>{const el=document.getElementById(id);if(el)el.addEventListener('touchend',ev=>{ev.preventDefault();el.click();},{passive:false});});
+
+// ── Automatische Sicherung im Gerät ─────────────────────────────────────────
+// iOS/Safari verwirft Hintergrund-Tabs bei Speicherdruck. Wer auf der Baustelle
+// erfasst, das iPad einsteckt und im Büro weitermacht, findet sonst eine frisch
+// geladene, leere Seite vor. Deshalb wandert der Stand nach jeder Änderung und
+// spätestens beim Wegschalten in die IndexedDB und wird beim Start wieder
+// angeboten. localStorage scheidet aus: Modellbilder und Fotos sprengen dessen
+// ~5 MB deutlich.
+const AB_DB='jxp_abnahme', AB_STORE='state', AB_KEY='aktuell';
+let abDbP=null;
+function abDb(){
+  if(abDbP)return abDbP;
+  abDbP=new Promise((res,rej)=>{
+    if(!window.indexedDB)return rej(new Error('IndexedDB nicht verfügbar'));
+    const rq=indexedDB.open(AB_DB,1);
+    rq.onupgradeneeded=()=>{const db=rq.result;if(!db.objectStoreNames.contains(AB_STORE))db.createObjectStore(AB_STORE);};
+    rq.onsuccess=()=>res(rq.result);
+    rq.onerror=()=>rej(rq.error||new Error('IndexedDB-Fehler'));
+  });
+  return abDbP;
+}
+function abPut(obj){
+  return abDb().then(db=>new Promise((res,rej)=>{
+    const tx=db.transaction(AB_STORE,'readwrite');
+    tx.objectStore(AB_STORE).put(obj,AB_KEY);
+    tx.oncomplete=res;
+    tx.onerror=tx.onabort=()=>rej(tx.error||new Error('Schreibfehler'));
+  }));
+}
+function abGet(){
+  return abDb().then(db=>new Promise((res,rej)=>{
+    const rq=db.transaction(AB_STORE,'readonly').objectStore(AB_STORE).get(AB_KEY);
+    rq.onsuccess=()=>res(rq.result||null);
+    rq.onerror=()=>rej(rq.error);
+  }));
+}
+function abDel(){
+  return abDb().then(db=>new Promise(res=>{
+    const tx=db.transaction(AB_STORE,'readwrite');
+    tx.objectStore(AB_STORE).delete(AB_KEY);
+    tx.oncomplete=tx.onerror=tx.onabort=()=>res();
+  })).catch(()=>{});
+}
+
+// abBereit verhindert, dass ein Aufruf vor der Wiederherstellung den gesicherten
+// Stand mit einer noch leeren Liste überschreibt oder löscht.
+let abDirty=false, abTimer=null, abLaeuft=false, abFehler='', abBereit=false;
+function abInfo(txt){const el=document.getElementById('ppAutoInfo');if(el)el.textContent=txt;}
+function abZeit(d){return d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});}
+// Nach jeder Änderung aufrufen. Sammelt kurz, damit Tippen im Kommentarfeld
+// nicht jedes Zeichen einzeln wegschreibt.
+function ppTouch(){
+  if(!abBereit)return;
+  abDirty=true;
+  if(abTimer)clearTimeout(abTimer);
+  abTimer=setTimeout(()=>abSpeichern(false),1200);
+}
+function abSpeichern(sofort){
+  if(abTimer){clearTimeout(abTimer);abTimer=null;}
+  if(!abDirty||abLaeuft)return Promise.resolve();
+  if(!PP.length){abDirty=false;return abDel().then(()=>abInfo('–'));}
+  abLaeuft=true;
+  const stand=ppStateObj();
+  return abPut(stand).then(()=>{
+    abDirty=false;abFehler='';
+    abInfo('automatisch gesichert '+abZeit(new Date())+' · '+PP.length+' Prüfpunkte');
+  }).catch(err=>{
+    abFehler=err&&err.name==='QuotaExceededError'?'Speicher voll':(err&&err.message)||'Fehler';
+    abInfo('⚠ automatische Sicherung fehlgeschlagen ('+abFehler+') – bitte 💾 Sichern');
+    if(!sofort)toast('Automatische Sicherung fehlgeschlagen: '+abFehler+' – bitte „💾 Sichern" nutzen','err');
+  }).then(()=>{abLaeuft=false;});
+}
+// Der letzte Moment, in dem auf iOS noch Code läuft, bevor die Seite verworfen
+// wird. Hier wird ohne Verzögerung geschrieben.
+['pagehide','freeze'].forEach(ev=>window.addEventListener(ev,()=>abSpeichern(true)));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')abSpeichern(true);});
+window.addEventListener('beforeunload',()=>{abSpeichern(true);});
+// Auffangnetz: jede Eingabe im Abnahme-Bereich zählt als Änderung, auch wenn an
+// einer Stelle einmal kein ppTouch() steht.
+['input','change'].forEach(ev=>{
+  const p=document.getElementById('panelAbnahme');
+  if(p)p.addEventListener(ev,()=>{if(PP.length)ppTouch();});
+});
+
+// Beim Start den letzten Stand anbieten
+function abRestoreBar(d){
+  const bar=document.getElementById('ppRestoreBar');
+  if(!bar)return;
+  const t=d.saved?new Date(d.saved):null;
+  document.getElementById('ppRestoreTxt').innerHTML=
+    '🔄 <b>Letzte Sitzung wiederhergestellt</b><br>'
+    +(d.PP||[]).length+' Prüfpunkte, Stand '
+    +(t?t.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit'})+' '+abZeit(t):'unbekannt')
+    +'. Die Seite war zwischendurch geschlossen oder wurde vom Gerät verworfen.';
+  bar.style.display='block';
+}
+function abRestore(){
+  return abGet().then(d=>{
+    if(!d||!d.PP||!d.PP.length)return;
+    if(PP.length)return;                       // nichts überschreiben
+    try{
+      ppApplyState(d);
+      abInfo('automatisch gesichert '+(d.saved?abZeit(new Date(d.saved)):'')+' · '+PP.length+' Prüfpunkte');
+      abRestoreBar(d);
+      toast(PP.length+' Prüfpunkte aus der letzten Sitzung wiederhergestellt');
+    }catch(err){console.warn('Wiederherstellung fehlgeschlagen',err);}
+  }).catch(err=>{
+    console.warn('Kein gesicherter Stand',err);
+    abInfo('automatische Sicherung nicht verfügbar – bitte 💾 Sichern nutzen');
+  }).then(()=>{
+    abDirty=false;
+    abBereit=true;      // ab jetzt darf geschrieben werden
+  });
+}
+document.getElementById('ppRestoreOk').addEventListener('click',()=>{
+  document.getElementById('ppRestoreBar').style.display='none';
+});
+document.getElementById('ppRestoreNo').addEventListener('click',()=>{
+  if(!confirm('Die '+PP.length+' wiederhergestellten Prüfpunkte verwerfen und leer starten?'))return;
+  PP.length=0;ppCur=null;
+  document.getElementById('ppForm').style.display='none';
+  document.getElementById('ppEmpty').style.display='flex';
+  document.getElementById('ppRestoreBar').style.display='none';
+  ppRenderList();
+  abDirty=false;abDel().then(()=>abInfo('–'));
+  toast('Wiederhergestellte Prüfpunkte verworfen');
+});
+['ppRestoreOk','ppRestoreNo'].forEach(id=>{
+  const el=document.getElementById(id);
+  if(el)el.addEventListener('touchend',ev=>{ev.preventDefault();el.click();},{passive:false});
+});
+abRestore();
 
 // ── Exporte ─────────────────────────────────────────────────────────────────
 async function ppExportPDF(pp){
@@ -2996,6 +3139,7 @@ document.getElementById('ppDel').addEventListener('click',()=>{
   ppCur=PP[Math.min(i,PP.length-1)]||null;
   if(ppCur)ppOpen(ppCur);
   else{document.getElementById('ppForm').style.display='none';document.getElementById('ppEmpty').style.display='flex';ppRenderList();}
+  ppTouch();
   toast('Prüfpunkt gelöscht');
 });
 document.getElementById('ppViewGo').addEventListener('click',()=>{
@@ -3026,6 +3170,7 @@ document.getElementById('ppShot').addEventListener('click',()=>{
   document.getElementById('ppBild').src=b;
   document.getElementById('ppBild').style.display='block';
   ppRenderList();
+  ppTouch();
   toast('Bild neu aufgenommen');
 });
 document.getElementById('ppKritAdd').addEventListener('click',()=>{
@@ -3041,7 +3186,7 @@ document.getElementById('ppKritFromAttr').addEventListener('click',()=>{
   if(!attrK.length){toast('Keine Attribute gewählt – „⚙ Auswahl"','warn');return;}
   // Attribut-Kriterien neu, manuelle Zeilen (ohne attr) bleiben erhalten
   ppCur.kriterien=attrK.concat(ppCur.kriterien.filter(k=>!k.attr));
-  ppRenderKrit();ppRenderList();
+  ppRenderKrit();ppRenderList();ppTouch();
   toast(attrK.length+' Kriterien aus Attributen');
 });
 document.getElementById('ppKritFromTpl').addEventListener('click',()=>{
@@ -3052,7 +3197,7 @@ document.getElementById('ppKritFromTpl').addEventListener('click',()=>{
   const add=kritTpl.filter(t=>t.trim()&&!have.has(t)).map(t=>({text:t,status:''}));
   if(!add.length){toast('Vorlage bereits enthalten','warn');return;}
   ppCur.kriterien=ppCur.kriterien.concat(add);
-  ppRenderKrit();ppRenderList();
+  ppRenderKrit();ppRenderList();ppTouch();
   toast(add.length+' Kriterien aus Vorlage');
 });
 document.getElementById('tplAdd').addEventListener('click',()=>{
@@ -3089,6 +3234,7 @@ document.getElementById('ppFotoPickBtn').addEventListener('click',()=>document.g
     if(ppCur===pp)ppRenderFotos();
     const neu=ppFotos(pp).slice(vorher);
     if(!neu.length){toast('Bild konnte nicht gelesen werden','warn');return;}
+    ppTouch();
     toast((neu.length>1?neu.length+' Bilder':'Bild')+' hinzugefügt · '
           +fotoGroesse(neu.reduce((s,f)=>s+fotoBytes(f.src),0)));
   });
@@ -3105,6 +3251,7 @@ document.getElementById('ppAttrOk').addEventListener('click',()=>{
   if(ppCur){
     document.getElementById('ppAttrScope').textContent=ppCur.attrKeys?'eigene Auswahl':'Vorgabe';
     ppRenderAttrs();
+    ppTouch();
   }
 });
 document.getElementById('ppExpProtPNG').addEventListener('click',()=>{if(ppCur)ppExportProtokollPNG(ppCur);});
@@ -3238,6 +3385,7 @@ function saveStichprobe(status){
   pp.view=ppView();
   pp.bildRaw=ppCapture(pp);
   PP.push(pp);
+  ppTouch();
   document.getElementById('stichModal').style.display='none';
   ppClearMarks();
   ppOpen(pp);
@@ -4062,6 +4210,7 @@ function ppLiveCapture(){
   ppCur.bildRaw=b;
   const img=document.getElementById('ppBild');img.src=b;img.style.display='block';
   ppRenderList();
+  ppTouch();
   toast('Live-Ansicht als Modellbild übernommen');
 }
 document.getElementById('ppLiveGrab').addEventListener('click',ppLiveCapture);
@@ -4217,8 +4366,14 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.13';
+const APP_VERSION='3.14';
 const APP_CHANGELOG=[
+  {v:'3.14', date:'2026-08-11', notes:[
+    'Automatische Sicherung: Der Stand der Abnahme wird nach jeder Änderung und spätestens beim Wegschalten der App im Gerät gesichert (IndexedDB). Bisher lagen die Prüfpunkte nur im Arbeitsspeicher – wenn iOS den Safari-Tab bei Speicherdruck verworfen hat (typisch auf dem Weg von der Baustelle ins Büro), war die Erfassung weg',
+    'Beim Öffnen wird die letzte Sitzung wiederhergestellt; ein Hinweis über der Prüfpunkte-Liste nennt Zeitpunkt und Anzahl und bietet „Verwerfen" an, wenn man doch leer starten will',
+    'Unter „Abnahme sichern / laden" steht jetzt, wann zuletzt automatisch gesichert wurde. Schlägt das Sichern fehl (z.B. Speicher voll), wird darauf hingewiesen',
+    'Die automatische Sicherung ersetzt „💾 Sichern" nicht: sie liegt nur auf diesem Gerät und in diesem Browser. Für Übergabe, Archiv und Gerätewechsel weiter die Abnahme-Datei speichern',
+  ]},
   {v:'3.13', date:'2026-08-11', notes:[
     'Abnahme: je Prüfpunkt sind jetzt mehrere Baustellenfotos als Nachweis möglich statt nur eines. „📷 Foto" nimmt wie bisher mit der Kamera auf, „🖼 Bilder wählen" fügt mehrere Bilder auf einmal aus der Galerie hinzu',
     'Die Fotos erscheinen als Vorschaustreifen mit Nummer; Antippen zeigt das Bild groß, ✕ entfernt es einzeln',
