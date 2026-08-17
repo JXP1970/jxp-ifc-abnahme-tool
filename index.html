@@ -167,6 +167,15 @@ th.num{text-align:right}
 .vik{color:var(--muted)}.viv{color:var(--text-strong)}
 /* MARK PANEL */
 .mp{position:absolute;bottom:36px;left:12px;background:var(--glass);border:1px solid #ff4400;border-radius:8px;padding:11px 13px;font-size:16.5px;backdrop-filter:blur(8px);min-width:190px;display:none;z-index:3}
+/* Positionszeilen im Markierungsfenster: Tippen wählt die Position wieder ab.
+   Die Trefferfläche ist bewusst über die Zeilenbreite gezogen (Bedienung mit
+   Handschuh auf dem iPad). */
+.posrow{cursor:pointer;padding:5px 4px;margin:0 -4px;border-radius:4px;-webkit-tap-highlight-color:transparent;user-select:none}
+.posrow:hover{background:rgba(255,68,0,.10)}
+.posrow:active{background:rgba(255,68,0,.22)}
+.posx{margin-left:7px;color:var(--muted);font-weight:700}
+.posrow:hover .posx,.posrow:active .posx{color:#ff4400}
+.poslist{max-height:150px;overflow-y:auto;overscroll-behavior:contain}
 /* ABNAHME */
 .ab-wrap{display:flex;flex:1;overflow:hidden}
 .ab-left{width:220px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
@@ -1460,10 +1469,50 @@ function updateMP(){
     if(totals[k]!==undefined)html+='<div class="vir"><span class="vik">'+esc(k)+'</span><span class="viv">'+esc(fmtVal(k,totals[k]))+'</span></div>';
   }
   const pe=Object.entries(posCnts).sort((a,b)=>parseInt(a[0])-parseInt(b[0]));
-  if(pe.length<=6)pe.forEach(([g,c])=>{html+='<div class="vir"><span class="vik">Pos. '+esc(g)+'</span><span class="viv" style="color:var(--mark-txt)">'+c+'x</span></div>';});
-  else html+='<div style="font-size:10px;color:var(--muted)">'+pe.length+' Positionen</div>';
+  // Jede Position ist anklickbar und nimmt genau ihre Stäbe wieder aus der
+  // Markierung – so lässt sich eine zu weit geratene Auswahl korrigieren, ohne
+  // alles zu verwerfen und neu zu markieren. Ab sieben Positionen wandert die
+  // Liste in einen Rollbereich, damit das Fenster kompakt bleibt.
+  let ph='';
+  pe.forEach(([g,c])=>{
+    ph+='<div class="vir posrow" data-pos="'+esc(g)+'" title="Position abwählen">'
+       +'<span class="vik">Pos. '+esc(g)+'</span>'
+       +'<span class="viv" style="color:var(--mark-txt)">'+c+'x<span class="posx">✕</span></span></div>';
+  });
+  html+=pe.length>6?'<div class="poslist">'+ph+'</div>':ph;
   document.getElementById('mpRows').innerHTML=html;
 }
+
+// Alle markierten Stäbe einer Position wieder abwählen
+function unmarkPos(pos){
+  let n=0;
+  for(const m of meshes){
+    if((m.userData.grp||'?')!==pos||!marked.has(m.userData.id))continue;
+    marked.delete(m.userData.id);
+    m.userData.marked=false;
+    m.material.color.set(gc(m.userData.grp));
+    m.material.emissive.set(0);m.material.emissiveIntensity=0;
+    // „Aus" galt nur für Markierte – sichtbar bleibt, was der Gruppenfilter zulässt
+    m.userData.hidden=visGroups.size>0&&!visGroups.has(m.userData.grp);
+    n++;
+  }
+  if(!n)return;
+  // Ohne Markierung sind Ausblenden und Isolieren gegenstandslos
+  if(!marked.size){
+    markedHidden=false;isolateMode=false;
+    document.getElementById('mpHide').style.display='flex';
+    document.getElementById('mpShow').style.display='none';
+    document.getElementById('mpIso').style.display='';
+    document.getElementById('mpIsoOff').style.display='none';
+  }
+  meshes.forEach(m=>applyVis(m));   // Isolier-Ansicht auf den neuen Stand bringen
+  updateMP();
+  toast('Pos. '+pos+' abgewählt · '+n+(n===1?' Stab':' Stäbe'));
+}
+document.getElementById('mpRows').addEventListener('click',e=>{
+  const row=e.target.closest('.posrow');
+  if(row)unmarkPos(row.dataset.pos);
+});
 
 function showVInfo(ud){
   lastInfoUD=ud;
@@ -4378,8 +4427,12 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.16';
+const APP_VERSION='3.17';
 const APP_CHANGELOG=[
+  {v:'3.17', date:'2026-08-17', notes:[
+    'Im Markierungsfenster lassen sich die aufgeführten Positionen antippen und nehmen damit genau ihre Stäbe wieder aus der Markierung. Eine zu weit geratene Auswahl muss also nicht mehr komplett verworfen und neu aufgebaut werden',
+    'Die Positionsliste zeigt jetzt auch bei mehr als sechs Positionen alle Einträge (vorher nur „x Positionen"); ab dem siebten Eintrag wird sie rollbar, damit das Fenster kompakt bleibt',
+  ]},
   {v:'3.16', date:'2026-08-17', notes:[
     'Behoben: Bei manchen IFC-Dateien wurde zwar alles eingelesen (Tabelle gefüllt), der 3D-Viewer blieb aber leer – z.B. „Bewehrung Pylone Achse 30 Ost BA 7". Ursache: In solchen Exporten liegt ein Teil der Bauteile (dort die 292 LENTON-Schraubmuffen „G28") bereits in absoluten Lagekoordinaten, die Bewehrungsstäbe dagegen lagebezogen zum Bauwerk. Der Viewer hat die Einbaulage (IFCLOCALPLACEMENT) der Dreiecksnetze ignoriert, dadurch lagen beide Gruppen rund 3.500 km auseinander und die Ansicht zoomte auf den leeren Zwischenraum',
     'Die Einbaulage wird jetzt für alle Bauteile ausgewertet und das Modell auf die tatsächliche Ausdehnung zentriert',
