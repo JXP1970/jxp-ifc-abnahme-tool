@@ -953,10 +953,7 @@ function parseIFC(text){
     const m=args.match(/\(([^)]+)\)/);
     if(m) for(const el of [...m[1].matchAll(/#\d+/g)].map(x=>x[0])){if(!el2ps[el])el2ps[el]=[];el2ps[el].push(psid);}
   }
-  setP(60,'Zentrum...');
-  let sx=0,sy=0,sz=0,n=0;
-  for(const pts of Object.values(ptl)){for(const[x,y,z]of pts){sx+=x;sy+=y;sz+=z;n++;}if(n>5000)break;}
-  const cx=n?sx/n:0,cy=n?sy/n:0,cz=n?sz/n:0;
+  setP(60,'Einheiten...');
   // Längeneinheit aus IFCUNITASSIGNMENT bestimmen. IFC-Dateien deklarieren oft
   // mehrere SI-Einheiten (METRE, MILLI, CENTI) gleichzeitig – nur die per
   // UNITASSIGNMENT zugeordnete ist die echte Projekteinheit. Fallback: erste
@@ -973,7 +970,7 @@ function parseIFC(text){
   else if(lenU.includes('MICRO'))scale=1e-6;
   setP(70,'Objekte...');
   const objs=[];
-  let bb=null;   // Modellgrenzen der Rohr-Geometrie in IFC-Weltkoordinaten
+  let bb=null;   // Modellgrenzen aller Bauteile in IFC-Weltkoordinaten
   // Bewehrung kann je nach Export als IFCREINFORCINGBAR oder als generischer
   // IFCBUILDINGELEMENTPROXY vorliegen (z.B. nach DESITE / Layer-Konfigurator).
   // Beide haben dieselbe Argumentstruktur (GUID=0, Name=2, Repräsentation=6).
@@ -991,28 +988,27 @@ function parseIFC(text){
     }
     let fsId=null;
     if(shapeId&&prods[shapeId]){for(const rid of prods[shapeId]){if(reps[rid]){for(const iid of reps[rid]){if(fsets[iid]){fsId=iid;break;}}if(fsId)break;}}}
-    let geo=null;
+    // Dreiecksnetz sofort per IFCLOCALPLACEMENT in IFC-Weltkoordinaten bringen.
+    // Manche Exporte (z.B. Ost BA 7) legen einen Teil der Bauteile bereits in
+    // absoluten Lagekoordinaten ab und den Rest lagebezogen zum Bauwerk – ohne
+    // diese Umrechnung liegen beide Millionen Meter auseinander, die Ansicht
+    // zoomt auf den leeren Zwischenraum und man sieht gar nichts mehr.
+    let ts=null;
     if(fsId){
       const fs=fsets[fsId],pts=ptl[fs.plId];
       if(pts?.length){
-        const pos=new Float32Array(fs.tris.length*9),nor=new Float32Array(fs.tris.length*9);
-        let pi=0;
-        for(const [i0,i1,i2] of fs.tris){
-          const p0=pts[i0],p1=pts[i1],p2=pts[i2]; if(!p0||!p1||!p2){pi+=9;continue;}
-          const v=[[( p0[0]-cx)*scale,(p0[2]-cz)*scale,-(p0[1]-cy)*scale],
-                   [(p1[0]-cx)*scale,(p1[2]-cz)*scale,-(p1[1]-cy)*scale],
-                   [(p2[0]-cx)*scale,(p2[2]-cz)*scale,-(p2[1]-cy)*scale]];
-          const ax=v[1][0]-v[0][0],ay=v[1][1]-v[0][1],az=v[1][2]-v[0][2];
-          const bx=v[2][0]-v[0][0],by=v[2][1]-v[0][1],bz=v[2][2]-v[0][2];
-          const nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx,nl=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;
-          for(let k=0;k<3;k++){pos[pi]=v[k][0];pos[pi+1]=v[k][1];pos[pi+2]=v[k][2];nor[pi]=nx/nl;nor[pi+1]=ny/nl;nor[pi+2]=nz/nl;pi+=3;}
+        const pm=locMat(parts[5]?.trim());
+        const wp=pts.map(p=>mApply(pm,p));
+        for(const w of wp){
+          if(!bb)bb=[w[0],w[1],w[2],w[0],w[1],w[2]];
+          else for(let k=0;k<3;k++){if(w[k]<bb[k])bb[k]=w[k];if(w[k]>bb[k+3])bb[k+3]=w[k];}
         }
-        geo={pos,nor};
+        ts={pts:wp,tris:fs.tris};
       }
     }
     // Kein Dreiecksnetz? Dann Rohr-Geometrie aus IFCSWEPTDISKSOLID aufbauen.
     let sw=null;
-    if(!geo&&shapeId&&prods[shapeId]){
+    if(!ts&&shapeId&&prods[shapeId]){
       const out=[],pm=locMat(parts[5]?.trim());
       for(const rid of prods[shapeId])collectSwept(rid,pm,out,0);
       if(out.length){
@@ -1024,27 +1020,40 @@ function parseIFC(text){
         }
       }
     }
-    objs.push({id:eid,guid,name,pos:ap['Pos_Nr.']||ap['Position number']||'',props:ap,geo,propEids,sw});
+    objs.push({id:eid,guid,name,pos:ap['Pos_Nr.']||ap['Position number']||'',props:ap,geo:null,propEids,sw,ts});
   }
-  // Rohre erst jetzt vernetzen: der Modellmittelpunkt steht erst nach dem
-  // Einsammeln aller Instanzen fest (IFC-Weltkoordinaten sind oft riesig).
+  // Netze erst jetzt aufbauen: der Modellmittelpunkt steht erst nach dem
+  // Einsammeln aller Bauteile fest (IFC-Weltkoordinaten sind oft riesig).
   if(bb){
     setP(85,'Bewehrung...');
     const mx=(bb[0]+bb[3])/2,my=(bb[1]+bb[4])/2,mz=(bb[2]+bb[5])/2;
+    const toView=w=>[(w[0]-mx)*scale,(w[2]-mz)*scale,-(w[1]-my)*scale];
     for(const o of objs){
-      if(!o.sw)continue;
-      const pos=[],nor=[];
-      for(const it of o.sw){
-        const pts=plines[it.s.dir].map(p=>{
-          const w=mApply(it.m,p);
-          return [(w[0]-mx)*scale,(w[2]-mz)*scale,-(w[1]-my)*scale];
-        });
-        tubeMesh(pts,it.s.r*scale,8,pos,nor);
+      if(o.ts){
+        const tris=o.ts.tris,vp=o.ts.pts.map(toView);
+        const pos=new Float32Array(tris.length*9),nor=new Float32Array(tris.length*9);
+        let pi=0;
+        for(const [i0,i1,i2] of tris){
+          const p0=vp[i0],p1=vp[i1],p2=vp[i2]; if(!p0||!p1||!p2){pi+=9;continue;}
+          const ax=p1[0]-p0[0],ay=p1[1]-p0[1],az=p1[2]-p0[2];
+          const bx=p2[0]-p0[0],by=p2[1]-p0[1],bz=p2[2]-p0[2];
+          const nx=ay*bz-az*by,ny=az*bx-ax*bz,nz=ax*by-ay*bx,nl=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;
+          const v=[p0,p1,p2];
+          for(let k=0;k<3;k++){pos[pi]=v[k][0];pos[pi+1]=v[k][1];pos[pi+2]=v[k][2];nor[pi]=nx/nl;nor[pi+1]=ny/nl;nor[pi+2]=nz/nl;pi+=3;}
+        }
+        o.geo={pos,nor};
       }
-      if(pos.length)o.geo={pos:new Float32Array(pos),nor:new Float32Array(nor)};
+      if(o.sw){
+        const pos=[],nor=[];
+        for(const it of o.sw){
+          const pts=plines[it.s.dir].map(p=>toView(mApply(it.m,p)));
+          tubeMesh(pts,it.s.r*scale,8,pos,nor);
+        }
+        if(pos.length)o.geo={pos:new Float32Array(pos),nor:new Float32Array(nor)};
+      }
     }
   }
-  for(const o of objs)delete o.sw;
+  for(const o of objs){delete o.sw;delete o.ts;}
   return objs;
 }
 
@@ -4369,8 +4378,12 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.15';
+const APP_VERSION='3.16';
 const APP_CHANGELOG=[
+  {v:'3.16', date:'2026-08-17', notes:[
+    'Behoben: Bei manchen IFC-Dateien wurde zwar alles eingelesen (Tabelle gefüllt), der 3D-Viewer blieb aber leer – z.B. „Bewehrung Pylone Achse 30 Ost BA 7". Ursache: In solchen Exporten liegt ein Teil der Bauteile (dort die 292 LENTON-Schraubmuffen „G28") bereits in absoluten Lagekoordinaten, die Bewehrungsstäbe dagegen lagebezogen zum Bauwerk. Der Viewer hat die Einbaulage (IFCLOCALPLACEMENT) der Dreiecksnetze ignoriert, dadurch lagen beide Gruppen rund 3.500 km auseinander und die Ansicht zoomte auf den leeren Zwischenraum',
+    'Die Einbaulage wird jetzt für alle Bauteile ausgewertet und das Modell auf die tatsächliche Ausdehnung zentriert',
+  ]},
   {v:'3.15', date:'2026-08-11', notes:[
     'Behoben: In V3.13/V3.14 kamen mit dem iPad aufgenommene oder aus der Galerie gewählte Bilder nicht an – es erschien weder ein Foto noch eine Meldung. Der Datei-Wähler wurde zurückgesetzt, bevor die Auswahl kopiert war; das Zurücksetzen leert aber laut HTML-Spezifikation genau die Liste, aus der die Bilder noch gelesen werden mussten',
   ]},
