@@ -1073,7 +1073,7 @@ class OC{
     this._dt=0;this._dp=0;this._pan=new THREE.Vector3();
     this._t1=null;this._pd=0;
     let mb=-1,ms={x:0,y:0};
-    el.addEventListener('mousedown',e=>{if(boxMode||measureMode||clipDragging||drawMode)return;mb=e.button;ms={x:e.clientX,y:e.clientY};});
+    el.addEventListener('mousedown',e=>{if(boxMode||measureMode||clipDragging||drawMode)return;mb=e.button;ms={x:e.clientX,y:e.clientY};if(mb===0)this.setPivotAt(e.clientX,e.clientY);});
     el.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.08:0.92;this.sph.radius=Math.max(0.00001,Math.min(5000,this.sph.radius*f));this.sync();},{passive:false});
     el.addEventListener('contextmenu',e=>e.preventDefault());
     window.addEventListener('mousemove',e=>{
@@ -1081,11 +1081,11 @@ class OC{
       if(mb===0){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._dt-=dx*0.005;this._dp-=dy*0.005;ms={x:e.clientX,y:e.clientY};}
       if(mb===2||mb===1){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._pan.add(new THREE.Vector3(-dx,dy,0).multiplyScalar(this.sph.radius*0.001).applyQuaternion(cam.quaternion));ms={x:e.clientX,y:e.clientY};}
     });
-    window.addEventListener('mouseup',()=>{mb=-1;});
+    window.addEventListener('mouseup',()=>{mb=-1;this._dragging=false;});
     let tapStart=null,tapMoved=false;
     el.addEventListener('touchstart',e=>{
       if(boxMode||measureMode||clipDragging||drawMode)return;
-      if(e.touches.length===1){this._t1={x:e.touches[0].clientX,y:e.touches[0].clientY};this._pd=0;tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};tapMoved=false;}
+      if(e.touches.length===1){this._t1={x:e.touches[0].clientX,y:e.touches[0].clientY};this._pd=0;tapStart={x:e.touches[0].clientX,y:e.touches[0].clientY,t:Date.now()};tapMoved=false;this.setPivotAt(e.touches[0].clientX,e.touches[0].clientY);}
       else if(e.touches.length===2){const t0=e.touches[0],t1=e.touches[1];this._pd=Math.hypot(t1.clientX-t0.clientX,t1.clientY-t0.clientY);this._t1={x:(t0.clientX+t1.clientX)/2,y:(t0.clientY+t1.clientY)/2};tapStart=null;}
     },{passive:true});
     el.addEventListener('touchmove',e=>{
@@ -1109,16 +1109,51 @@ class OC{
     el.addEventListener('touchend',e=>{
       if(boxMode||measureMode||clipDragging||drawMode)return;
       if(e.touches.length===0){
+        this._dragging=false;
         if(!tapMoved&&tapStart&&Date.now()-tapStart.t<300){doRaycast(tapStart.x,tapStart.y);}
         this._t1=null;this._pd=0;tapStart=null;
       } else if(e.touches.length===1){this._t1={x:e.touches[0].clientX,y:e.touches[0].clientY};this._pd=0;}
     },{passive:true});
   }
+  // Drehpunkt = Modellpunkt unter dem Mauszeiger/Finger beim Start des Drehens.
+  // Trifft der Strahl nichts (oder nur weggeschnittene Teile), wird wie bisher
+  // um die Bildmitte gedreht.
+  setPivotAt(cx,cy){
+    this.pivot=pickModelPoint(cx,cy);
+    this._dragging=true;
+  }
   update(){
-    this.sph.theta+=this._dt;this.sph.phi+=this._dp;
-    this.sph.phi=Math.max(.05,Math.min(Math.PI-.05,this.sph.phi));
+    const ph0=this.sph.phi;
+    const ph1=Math.max(.05,Math.min(Math.PI-.05,ph0+this._dp));
+    const dp=ph1-ph0,dt=this._dt;
+    if(this.pivot&&(Math.abs(dt)>1e-7||Math.abs(dp)>1e-7)){
+      // Kamera und Zielpunkt gemeinsam um den Drehpunkt schwenken:
+      // erst um die waagrechte Kameraachse (Neigung), dann um die Hochachse.
+      const off=new THREE.Vector3().setFromSpherical(this.sph);
+      const ax=new THREE.Vector3(0,1,0).cross(off).normalize();
+      const q=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),dt)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(ax,dp));
+      const cam=this.target.clone().add(off);
+      cam.sub(this.pivot).applyQuaternion(q).add(this.pivot);
+      this.target.sub(this.pivot).applyQuaternion(q).add(this.pivot);
+      this.sph.setFromVector3(cam.sub(this.target));
+      this.sph.phi=Math.max(.05,Math.min(Math.PI-.05,this.sph.phi));
+    } else {
+      this.sph.theta+=dt;this.sph.phi=ph1;
+    }
     this.target.add(this._pan); this.sync();
     this._dt*=.75;this._dp*=.75;this._pan.multiplyScalar(.75);
+    this._pivotMarker();
+  }
+  _pivotMarker(){
+    if(!this._pm){
+      this._pm=new THREE.Mesh(new THREE.SphereGeometry(1,16,12),
+        new THREE.MeshBasicMaterial({color:0xffcc00,depthTest:false,transparent:true,opacity:.9}));
+      this._pm.renderOrder=999;this._pm.visible=false;scene.add(this._pm);
+    }
+    const show=!!(this.pivot&&this._dragging);
+    this._pm.visible=show;
+    if(show){this._pm.position.copy(this.pivot);this._pm.scale.setScalar(this.cam.position.distanceTo(this.pivot)*.006);}
   }
   sync(){const o=new THREE.Vector3();o.setFromSpherical(this.sph);this.cam.position.copy(this.target).add(o);this.cam.lookAt(this.target);}
   fitTo(box){const c=box.getCenter(new THREE.Vector3()),s=box.getSize(new THREE.Vector3()),d=Math.max(s.x,s.y,s.z);this.target.copy(c);this.sph.radius=d*1.8;this.sph.phi=Math.PI/3;this.sph.theta=Math.PI/6;this.sync();}
@@ -1422,6 +1457,22 @@ function syncGroupActive(){
 }
 
 const rc=new THREE.Raycaster();const mouse=new THREE.Vector2();
+// Erster sichtbarer Modellpunkt unter Bildschirmkoordinate (für den Drehpunkt).
+// Beim Box-Schnitt zählen nur Treffer innerhalb der Box.
+function pickModelPoint(cx,cy){
+  if(!meshes.length)return null;
+  const canvas=document.getElementById('vc');const rect=canvas.getBoundingClientRect();
+  mouse.x=((cx-rect.left)/rect.width)*2-1;
+  mouse.y=-((cy-rect.top)/rect.height)*2+1;
+  rc.setFromCamera(mouse,camera);
+  const hits=rc.intersectObjects(meshes.filter(m=>m.visible&&m.material.opacity>0.1));
+  for(const h of hits){
+    const p=h.point;
+    if(clipOn&&(p.x<clipVal.xmin||p.x>clipVal.xmax||p.y<clipVal.ymin||p.y>clipVal.ymax||p.z<clipVal.zmin||p.z>clipVal.zmax))continue;
+    return p.clone();
+  }
+  return null;
+}
 function doRaycast(cx,cy){
   const canvas=document.getElementById('vc');const rect=canvas.getBoundingClientRect();
   mouse.x=((cx-rect.left)/rect.width)*2-1;
@@ -4427,8 +4478,11 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.17';
+const APP_VERSION='3.18';
 const APP_CHANGELOG=[
+  {v:'3.18', date:'2026-11-10', notes:[
+    'Drehen um den angeklickten Punkt: Wer mit der linken Maustaste (bzw. einem Finger) auf einen Stab drückt und zieht, dreht das Modell jetzt um genau diesen Punkt statt um die Bildmitte. Ein kleiner gelber Punkt zeigt den Drehpunkt während des Drehens. Wird ins Leere geklickt, dreht die Ansicht wie bisher um die Mitte',
+  ]},
   {v:'3.17', date:'2026-08-17', notes:[
     'Im Markierungsfenster lassen sich die aufgeführten Positionen antippen und nehmen damit genau ihre Stäbe wieder aus der Markierung. Eine zu weit geratene Auswahl muss also nicht mehr komplett verworfen und neu aufgebaut werden',
     'Die Positionsliste zeigt jetzt auch bei mehr als sechs Positionen alle Einträge (vorher nur „x Positionen"); ab dem siebten Eintrag wird sie rollbar, damit das Fenster kompakt bleibt',
