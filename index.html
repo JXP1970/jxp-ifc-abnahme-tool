@@ -1078,7 +1078,7 @@ class OC{
     el.addEventListener('contextmenu',e=>e.preventDefault());
     window.addEventListener('mousemove',e=>{
       if(boxMode||measureMode||clipDragging||drawMode)return;
-      if(mb===0){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._dt-=dx*0.005;this._dp-=dy*0.005;ms={x:e.clientX,y:e.clientY};}
+      if(mb===0){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._dt-=dx*0.0025;this._dp-=dy*0.0025;ms={x:e.clientX,y:e.clientY};}
       if(mb===2||mb===1){const dx=e.clientX-ms.x,dy=e.clientY-ms.y;this._pan.add(new THREE.Vector3(-dx,dy,0).multiplyScalar(this.sph.radius*0.001).applyQuaternion(cam.quaternion));ms={x:e.clientX,y:e.clientY};}
     });
     window.addEventListener('mouseup',()=>{mb=-1;this._dragging=false;});
@@ -4478,8 +4478,11 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.19';
+const APP_VERSION='3.20';
 const APP_CHANGELOG=[
+  {v:'3.20', date:'2026-11-10', notes:[
+    'Drehen mit der linken Maustaste ist ruhiger: Das Modell dreht sich pro Mausbewegung nur noch halb so weit (etwa eine volle Umdrehung auf 630 Pixel statt auf 315). Drehen per Finger auf dem iPad bleibt unverändert',
+  ]},
   {v:'3.19', date:'2026-11-10', notes:[
     'Zoomen mit dem Mausrad ist feiner: Ein Rad-Klick zoomt jetzt um 4 % statt 8 %, so lässt sich genauer an eine Stelle heranfahren',
   ]},
