@@ -1074,7 +1074,7 @@ class OC{
     this._t1=null;this._pd=0;
     let mb=-1,ms={x:0,y:0};
     el.addEventListener('mousedown',e=>{if(boxMode||measureMode||clipDragging||drawMode)return;mb=e.button;ms={x:e.clientX,y:e.clientY};if(mb===0)this.setPivotAt(e.clientX,e.clientY);});
-    el.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.08:0.92;this.sph.radius=Math.max(0.00001,Math.min(5000,this.sph.radius*f));this.sync();},{passive:false});
+    el.addEventListener('wheel',e=>{e.preventDefault();const f=e.deltaY>0?1.04:1/1.04;this.sph.radius=Math.max(0.00001,Math.min(5000,this.sph.radius*f));this.sync();},{passive:false});
     el.addEventListener('contextmenu',e=>e.preventDefault());
     window.addEventListener('mousemove',e=>{
       if(boxMode||measureMode||clipDragging||drawMode)return;
@@ -1172,7 +1172,7 @@ class MiniOrbit{
     el.addEventListener('mousedown',e=>{mb=e.button;ms={x:e.clientX,y:e.clientY};});
     window.addEventListener('mousemove',e=>{if(mb<0)return;const dx=e.clientX-ms.x,dy=e.clientY-ms.y;ms={x:e.clientX,y:e.clientY};if(mb===0)rot(dx,dy);else pan(dx,dy);});
     window.addEventListener('mouseup',()=>{mb=-1;});
-    el.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.08:0.92);},{passive:false});
+    el.addEventListener('wheel',e=>{e.preventDefault();zoom(e.deltaY>0?1.04:1/1.04);},{passive:false});
     el.addEventListener('contextmenu',e=>e.preventDefault());
     el.addEventListener('touchstart',e=>{
       if(e.touches.length===1){t1={x:e.touches[0].clientX,y:e.touches[0].clientY};pd=0;}
@@ -4478,8 +4478,11 @@ annSetTool('pen');
 // Für ein Update: APP_VERSION hochzählen und oben einen neuen Eintrag in
 // APP_CHANGELOG ergänzen (neueste Version zuerst). Das Badge im Header und
 // der Versionsverlauf aktualisieren sich automatisch.
-const APP_VERSION='3.18';
+const APP_VERSION='3.19';
 const APP_CHANGELOG=[
+  {v:'3.19', date:'2026-11-10', notes:[
+    'Zoomen mit dem Mausrad ist feiner: Ein Rad-Klick zoomt jetzt um 4 % statt 8 %, so lässt sich genauer an eine Stelle heranfahren',
+  ]},
   {v:'3.18', date:'2026-11-10', notes:[
     'Drehen um den angeklickten Punkt: Wer mit der linken Maustaste (bzw. einem Finger) auf einen Stab drückt und zieht, dreht das Modell jetzt um genau diesen Punkt statt um die Bildmitte. Ein kleiner gelber Punkt zeigt den Drehpunkt während des Drehens. Wird ins Leere geklickt, dreht die Ansicht wie bisher um die Mitte',
   ]},
